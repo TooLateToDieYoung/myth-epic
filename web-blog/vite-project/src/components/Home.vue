@@ -21,7 +21,11 @@ onBeforeMount( async function () {
 <template>
     <div @click="clickHandler">
         Home
-        <nav v-for="(val, key, idx) in menu" :key="key">[{{ idx }}] {{ key }} : {{ val }}</nav>
+        <nav v-for="(val, key, idx) in menu" :key="key">
+            <router-link :to="'/Lyrics/' + key">
+                [{{ idx }}] {{ key }} : {{ val }}
+            </router-link>
+        </nav>
     </div>
 </template>
 
