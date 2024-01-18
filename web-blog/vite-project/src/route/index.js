@@ -11,6 +11,10 @@ export default createRouter({
         {
             path: '/',
             redirect: '/Home'
+        },
+        {
+            path: '/Lyrics/:name',
+            component: () => import('../components/Lyrics.vue')
         }
     ]
 });
