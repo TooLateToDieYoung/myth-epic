@@ -1,4 +1,5 @@
 /* C89 Std. */
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,86 +11,114 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-int handleClient(void *client_socket_ptr) {
-    int client_socket = *((int *)client_socket_ptr);
-    free(client_socket_ptr);
+static int handler(void *param)
+{
+    if (NULL == param)
+    {
+        return -1;
+    }
 
-    // TODO
+    const int clientSocket = *(int *)param;
+    free(param);
 
-    close(client_socket);
-    printf("Connection closed.\n");
+    const char * const content = "<html><head><title>MythEpic</title></head><body><div>Hello, World!</div></body></html>";
 
+    char response[256] = {0};
+    snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n%s", strlen(content), content);
+
+    send(clientSocket, response, sizeof(response), 0);
+
+    close(clientSocket);
+    fprintf(stdout, "[INFO] connection closed\n");
     return 0;
 }
 
-void startServer(int port, int max_connections) {
-    int server_socket, *client_socket;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-    thrd_t thread_id;
+int main(int argc, char *argv[])
+{
+    int ret = 0;
 
-    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("Error creating socket");
+/* check parameters */
+    if (3 != argc)
+    {
+        fprintf(stderr, "Usage: %s <listen_port> <max_connections>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        perror("Error binding socket");
+    const int listenPort = atoi(argv[1]);
+    const int maxConnections = atoi(argv[2]);
+    if (0 >= listenPort || 0 >= maxConnections)
+    {
+        fprintf(stderr, "[ERROR] invalid listen_port or max_connections value\n");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_socket, max_connections) == -1) {
-        perror("Error listening on socket");
+/* prepare server socket */
+    const int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (-1 == serverSocket)
+    {
+        fprintf(stderr, "[ERROR] error creating socket > %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    printf("Server listening on port %d with a maximum of %d connections...\n", port, max_connections);
+    struct sockaddr_in serverSockAddr = {0};
+    serverSockAddr.sin_family = AF_INET;
+    serverSockAddr.sin_port = htons(listenPort);
+    serverSockAddr.sin_addr.s_addr = INADDR_ANY;
 
-    while (1) {
-        if ((client_socket = (int *)malloc(sizeof(int))) == NULL) {
-            perror("Error allocating memory");
-            exit(EXIT_FAILURE);
+    ret = bind(serverSocket, (struct sockaddr *)&serverSockAddr, sizeof(serverSockAddr));
+    if (-1 == ret)
+    {
+        close(serverSocket);
+        fprintf(stderr, "[ERROR] error binding socket > %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    ret = listen(serverSocket, maxConnections);
+    if (-1 == ret)
+    {
+        close(serverSocket);
+        fprintf(stderr, "[ERROR] error listening on socket > %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf(stdout, "[INFO] server listening on port %d with a maximum of %d connections\n", listenPort, maxConnections);
+
+/* trap and deal with client sockets */
+    int *clientSocket = NULL;
+    struct sockaddr_in clientSockAddr = {0};
+    socklen_t clientSockAddrLen = (socklen_t)sizeof(clientSockAddr);
+    thrd_t threadId = 0;
+    for (;;)
+    {
+        clientSocket = (int *)calloc(1, sizeof(int));
+        if (NULL == clientSocket)
+        {
+            fprintf(stderr, "[ERROR] error allocating memory for client socket > %s\n", strerror(errno));
+            break;
         }
 
-        if ((*client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len)) == -1) {
-            perror("Error accepting connection");
-            free(client_socket);
+        *clientSocket = accept(serverSocket, (struct sockaddr *)&clientSockAddr, &clientSockAddrLen);
+        if (-1 == *clientSocket)
+        {
+            free(clientSocket);
+            fprintf(stderr, "[ERROR] error accepting connection > %s\n", strerror(errno));
             continue;
         }
 
-        printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        fprintf(stdout, "[INFO] connection accepted from %s:%d\n", inet_ntoa(clientSockAddr.sin_addr), ntohs(clientSockAddr.sin_port));
 
-        if (thrd_create(&thread_id, (thrd_start_t)handleClient, (void *)client_socket) != thrd_success) {
-            perror("Error creating thread");
-            free(client_socket);
+        ret = thrd_create(&threadId, (thrd_start_t)handler, (void *)clientSocket);
+        if (thrd_success != ret)
+        {
+            free(clientSocket);
+            fprintf(stderr, "[ERROR] error creating thread > %s\n", strerror(errno));
             continue;
         }
 
-        thrd_join(thread_id, NULL);
+        thrd_detach(threadId); // ? free(clientSocket) in handler() function
     }
 
-    close(server_socket);
-}
-
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <port> <max_connections>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    int port = atoi(argv[1]);
-    int max_connections = atoi(argv[2]);
-
-    if (port <= 0 || max_connections <= 0) {
-        fprintf(stderr, "Invalid port or max_connections value\n");
-        exit(EXIT_FAILURE);
-    }
-
-    startServer(port, max_connections);
-
-    return 0;
+    close(serverSocket);
+    fprintf(stdout, "[INFO] server closed\n");
+    exit(EXIT_SUCCESS);
 }
