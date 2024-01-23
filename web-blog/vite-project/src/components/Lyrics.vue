@@ -1,28 +1,35 @@
 <script setup>
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+// import { ref } from 'vue'
+// import { useRoute } from 'vue-router'
 
 import Line from './Line.vue'
 
-const route = useRoute();
-const name = ref(route.params.name);
-const words = ref([
-    { shape: 'A', sound: 'aaa' },
-    { shape: 'B', sound: 'bbb' },
-    { shape: 'C', sound: 'ccc' }
-]);
+import song from '../assets/song.json'
+
+// const route = useRoute();
+// const name = ref(route.params.name);
 </script>
 
 <template>
     <div>
-        <!-- get from setup ref() -->
+        <!-- get from setup ref() 
         <div>{{ name }}</div>
+        -->
 
-        <!-- get from this #app instance => vue.use(route) => vue.$route.params -->
+        <!-- get from this #app instance => vue.use(route) => vue.$route.params 
         <div>{{ $route.params.name }}</div>
+        -->
 
-        <Line :words="words" />
+        <div class="title">{{ song.name }} - {{ song.singer }}</div>
+        <div class="lyrics">
+            <Line v-for="(value, index) in song.lyrics" :key="index" :line="value.line" :sign="value.sign" />
+        </div>
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.title {
+    font-size: 24px;
+    margin-bottom: 36px;
+}
+</style>
