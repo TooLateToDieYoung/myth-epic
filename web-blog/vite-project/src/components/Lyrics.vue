@@ -1,25 +1,34 @@
 <script setup>
-// import { ref } from 'vue'
-// import { useRoute } from 'vue-router'
+import { ref, onBeforeMount } from 'vue'
+import { useRoute } from 'vue-router'
 
 import Line from './Line.vue'
 
-import song from '../assets/song.json'
+const route = useRoute();
 
-// const route = useRoute();
-// const name = ref(route.params.name);
+const song = ref({});
+
+const getSong = async function (path) {
+    try {
+        const res = await fetch('http://127.0.0.1:1204/' + path);
+        if (!res.ok) {
+            throw 'fetch failed'
+        }
+
+        return await res.json();
+    }
+    catch (err) {
+        return { name: "N/A", singer: "N/A", lyrics: [] };
+    }
+}
+
+onBeforeMount(async function () {
+    song.value = await getSong(route.params.name);
+});
 </script>
 
 <template>
     <div>
-        <!-- get from setup ref() 
-        <div>{{ name }}</div>
-        -->
-
-        <!-- get from this #app instance => vue.use(route) => vue.$route.params 
-        <div>{{ $route.params.name }}</div>
-        -->
-
         <div class="title">{{ song.name }} - {{ song.singer }}</div>
         <div class="lyrics">
             <Line v-for="(value, index) in song.lyrics" :key="index" :line="value.line" :sign="value.sign" />

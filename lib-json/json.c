@@ -4,8 +4,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "../lib-list/list.h"
-#include "../lib-tree/tree.h"
+#include "list.h"
+#include "tree.h"
 
 typedef struct {
     void * key;

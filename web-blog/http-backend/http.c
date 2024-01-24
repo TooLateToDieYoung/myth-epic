@@ -11,6 +11,11 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+/* Myth Epic */
+#include "json.h"
+
+#define BUFFER_SIZE 20480
+
 static int handler(void *param)
 {
     if (NULL == param)
@@ -21,12 +26,65 @@ static int handler(void *param)
     const int clientSocket = *(int *)param;
     free(param);
 
-    const char * const content = "<html><head><title>MythEpic</title></head><body><div>Hello, World!</div></body></html>";
+    char request[BUFFER_SIZE] = {0};
+    const ssize_t ret = recv(clientSocket, request, sizeof(request), 0);
+    if (-1 != ret)
+    {
+        fprintf(stdout, "%s", request);
+    }
 
-    char response[256] = {0};
-    snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n\r\n%s", strlen(content), content);
+    char response[BUFFER_SIZE] = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\n\r\n[]\0";
+    if (NULL != strstr(request, "test"))
+    {
+        snprintf(response, sizeof(response),
+            "HTTP/1.1 200 OK\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "Content-Type: text/html\r\n"
+            "\r\n"
+            "<!DOCTYPE html>"
+            "<html lang=\"en\">"
+                "<head>"
+                    "<title>Myth Epic</title>"
+                    "<script>"
+                        "if (!!confirm('fetch?')) fetch('song').then(res => res.json()).then(res => console.log(res));"
+                    "</script>"
+                "</head>"
+            "</html>"
+            "<body>"
+                "<div>Hello, World!</div>"
+            "</body>"
+        );
+    }
+    else
+    {
+        const int offset = snprintf(response, BUFFER_SIZE,
+            "HTTP/1.1 200 OK\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Security-Policy: default-src 'self'\r\n"
+            "\r\n"
+        );
 
-    send(clientSocket, response, sizeof(response), 0);
+        json_s * const song = jsonParseFromFile("./song.json");
+        if (NULL != song)
+        {
+            jsonStringify(song, &response[offset], BUFFER_SIZE - offset);
+            jsonFree(song);
+        }
+        else
+        {
+            fprintf(stderr, "[ERROR] cannot parse json file\n");
+            snprintf(&response[offset], BUFFER_SIZE - offset,
+                "{"
+                    "\"name\": \"Unknown\","
+                    "\"singer\": \"Unknown\","
+                    "\"lyrics\": []"
+                "}"
+            );
+        }
+    }
+
+    send(clientSocket, response, strlen(response), 0);
 
     close(clientSocket);
     fprintf(stdout, "[INFO] connection closed\n");
