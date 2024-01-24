@@ -1,0 +1,11 @@
+[Unit]
+Description=Myth Epic Http Server
+After=network.target
+
+[Service]
+ExecStart=/home/shrimp/Documents/myth-epic/web-blog/http-backend/httpd 1204 5
+WorkingDirectory=/home/shrimp/Documents/myth-epic/web-blog/http-backend/
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

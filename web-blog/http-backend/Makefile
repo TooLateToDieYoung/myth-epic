@@ -14,7 +14,8 @@ OBJ_TREE = $(wildcard $(LIB_TREE_PATH)tree.c)
 all: $(TARGET)
 
 $(TARGET): $(SRC) $(OBJ_JSON) $(OBJ_LIST) $(OBJ_TREE) 
-	$(CC) $(CFLAGS) -o $@ $^ -I$(LIB_JSON_PATH) -I$(LIB_LIST_PATH) -I$(LIB_TREE_PATH) 
+	$(CC) $(CFLAGS) -o $@ $^ -I$(LIB_JSON_PATH) -I$(LIB_LIST_PATH) -I$(LIB_TREE_PATH)
+	chmod +x $(TARGET)
 
 clean:
 	rm -f $(TARGET)
