@@ -5,12 +5,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <stdio.h>
-#include <stddef.h>
-
-/* Myth Epic Library */
-#include "json.h"
-
 typedef enum { 
     HMGet, /* get data */
     HMPatch, /* change partial data */
@@ -20,7 +14,8 @@ typedef enum {
     HMOption, /* communication option */
     HMHead, /* same as method 'GET', but without response body */
     HMConnect, /* do handshake to make the tunnel */
-    HMTrace /* do loop-back test */
+    HMTrace, /* do loop-back test */
+    HMUnknown
 } http_method_e;
 
 typedef enum {
@@ -129,28 +124,22 @@ typedef enum {
     HCTUnknown
 } http_content_type_e;
 
-typedef union {
-    json_s * json;
-    char * string;
-} http_body_u;
-
-
 typedef struct {
+
     struct {
         http_method_e method;
-        json_s * header;
-        http_content_type_e type; /* get from req.header */
-        http_body_u body;
+        char header[8096];
+        char * body;
     } req;
 
     struct {
         http_status_e status;
-        json_s * header;
-        http_content_type_e type; /* assigned by res.body */
-        http_body_u body;
+        char header[8096];
+        char * body;
     } res;
-} http_s;
 
+    char msg[64]; /* feedback message for handler function */
+} http_s;
 
 #ifdef __cplusplus
 }

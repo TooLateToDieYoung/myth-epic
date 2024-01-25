@@ -11,12 +11,67 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-/* Myth Epic */
-#include "json.h"
+/* Myth Epic Lib. */
+#include "http.h"
+#include "api.h"
+#include "list.h"
 
-#define BUFFER_SIZE 20480
+#define BUFFER_SIZE 128
 
-static int handler(void *param)
+static int _httpRecvUntil(int srcSocket, char dstbuf[], size_t dstBufLen, const char * const dstEndStr)
+{
+    for ( size_t idx = 0; dstBufLen > idx; ++idx )
+    {
+        if ( 1 == recv(srcSocket, &dstbuf[idx], sizeof(char), 0) )
+        {
+            if ( NULL != strstr(dstbuf, dstEndStr) )
+            {
+                return idx;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return -1;
+}
+
+static http_method_e _httpMethod(const char * const method)
+{
+    if ( NULL != method )
+    {
+        if ( 0 == strcmp(method, "GET") ) { return HMGet; }
+        if ( 0 == strcmp(method, "PATCH") ) { return HMPatch; }
+        if ( 0 == strcmp(method, "PUT") ) { return HMPut; }
+        if ( 0 == strcmp(method, "POST") ) { return HMPost; }
+        if ( 0 == strcmp(method, "DELETE") ) { return HMDelete; }
+        if ( 0 == strcmp(method, "OPTION") ) { return HMOption; }
+        if ( 0 == strcmp(method, "HEAD") ) { return HMHead; }
+        if ( 0 == strcmp(method, "CONNECT") ) { return HMConnect; }
+        if ( 0 == strcmp(method, "TRACE") ) { return HMTrace; }
+    }
+
+    return HMUnknown;
+}
+
+static char * _httpStatus(http_status_e status)
+{
+    switch (status)
+    {
+        case HSOk: return "OK";
+        case HSNotFound: return "Not Found";
+
+        // TODO
+        
+        default: break;
+    }
+
+    return "";
+}
+
+static int _httpEntrance(void *param)
 {
     if (NULL == param)
     {
@@ -26,65 +81,176 @@ static int handler(void *param)
     const int clientSocket = *(int *)param;
     free(param);
 
-    char request[BUFFER_SIZE] = {0};
-    const ssize_t ret = recv(clientSocket, request, sizeof(request), 0);
-    if (-1 != ret)
-    {
-        fprintf(stdout, "%s", request);
-    }
+    int ret = -1;
+    char path[BUFFER_SIZE] = "/";
+    http_s http = {0};
 
-    char response[BUFFER_SIZE] = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\n\r\n[]\0";
-    if (NULL != strstr(request, "test"))
+    /* get request line */
+    char line[BUFFER_SIZE] = {0};
+    ret = _httpRecvUntil(clientSocket, line, sizeof(line), "\r\n");
+    if ( ret > 0 )
     {
-        snprintf(response, sizeof(response),
-            "HTTP/1.1 200 OK\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Content-Type: text/html\r\n"
-            "\r\n"
-            "<!DOCTYPE html>"
-            "<html lang=\"en\">"
-                "<head>"
-                    "<title>Myth Epic</title>"
-                    "<script>"
-                        "if (!!confirm('fetch?')) fetch('song').then(res => res.json()).then(res => console.log(res));"
-                    "</script>"
-                "</head>"
-            "</html>"
-            "<body>"
-                "<div>Hello, World!</div>"
-            "</body>"
-        );
+        const char * part = NULL;
+
+        part = strtok(line, " ");
+        if ( NULL != part )
+        {
+            http.req.method = _httpMethod(part);
+        }
+
+        part = strtok(NULL, " ");
+        if ( NULL != part )
+        {
+            strncpy(path, part, sizeof(path));
+        }
+
+        part = strtok(NULL, " ");
+        if ( NULL != part )
+        {
+            fprintf(stdout, "[INFO] http request version: %s\n", part);
+        }
     }
     else
     {
-        const int offset = snprintf(response, BUFFER_SIZE,
-            "HTTP/1.1 200 OK\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Security-Policy: default-src 'self'\r\n"
-            "\r\n"
-        );
+        // ! catch error
+    }
 
-        json_s * const song = jsonParseFromFile("./song.json");
-        if (NULL != song)
+    /* get request headers */
+    size_t contentLength = 0;
+    ret = _httpRecvUntil(clientSocket, http.req.header, sizeof(http.req.header), "\r\n\r\n");
+    if ( ret > 0 )
+    {
+        // ? do something check
+
+        const char * const headerPtr = strstr(http.req.header, "Content-Type:"); 
+        if ( NULL != headerPtr )
         {
-            jsonStringify(song, &response[offset], BUFFER_SIZE - offset);
-            jsonFree(song);
+            char * endPtr = NULL;
+            contentLength = (size_t)strtoull(headerPtr + strlen("Content-Type:"), &endPtr, 10);
+            if ( NULL == endPtr || isgraph(*endPtr) )
+            { 
+                // ! catch error
+            }
+        }
+    }
+    else
+    {
+        // ! catch error
+    }
+
+    // TODO
+    /* get request body */
+    if ( 0 != contentLength )
+    {
+        http.req.body = (char *)calloc(contentLength, sizeof(char));
+        ret = recv(clientSocket, http.req.body, contentLength, 0);
+    }
+#if 0 // ? Still has some problem: listMake() doesn't accept NULL
+    else if ( NULL != strstr(http.req.header, "Transfer-Encoding:") )
+    {
+        list_s * const list = listMake(NULL, NULL, free);
+        if ( NULL != list )
+        {
+            char * item = NULL;
+            char temp[BUFFER_SIZE] = {0};
+            size_t partialLen = 0;
+            do {
+                memset(temp, 0, sizeof(temp));
+
+                ret = _httpRecvUntil(clientSocket, temp, sizeof(temp), "\r\n");
+                if ( ret > 0 )
+                {
+                    partialLen = strtoull(temp, NULL, 10);
+                }
+                else
+                {
+                    // ! catch error
+                }
+
+                item = (char *)calloc(partialLen, sizeof(char));
+                if ( NULL == item )
+                {
+                    // ! catch error
+                }
+
+                ret = recv(clientSocket, item, partialLen, 0);
+                if ( ret > 0 )
+                {
+                    listInsert(list, ~0, item);
+                }
+                else
+                {
+                    // ! catch error
+                    free(item);
+                }
+                
+                contentLength += partialLen;
+            } while ( 0 != partialLen );
+
+            if ( contentLength > 0 )
+            {
+                http.req.body = (char *)calloc(contentLength, sizeof(char));
+                for ( size_t idx = 0; listLength(list) > idx; ++idx )
+                {
+                    strncat(http.req.body, listAccess(list, idx), contentLength);
+                }
+
+                listFree(list);
+            }
         }
         else
         {
-            fprintf(stderr, "[ERROR] cannot parse json file\n");
-            snprintf(&response[offset], BUFFER_SIZE - offset,
-                "{"
-                    "\"name\": \"Unknown\","
-                    "\"singer\": \"Unknown\","
-                    "\"lyrics\": []"
-                "}"
-            );
+            // ! catch error
+        }
+    }
+#endif
+    else
+    {
+        // TODO: how to recv an undefined length body
+    }
+
+    /* looking for the handler */
+    for ( size_t idx = 0; NULL != api[idx].path; ++idx )
+    {
+        if ( 0 == strcmp(path, api[idx].path) )
+        {
+            ret = api[idx].handler(&http);
+            if ( NULL != http.req.body )
+            {
+                free(http.req.body);
+                http.req.body = NULL;
+            }
+            break;
         }
     }
 
-    send(clientSocket, response, strlen(response), 0);
+    if ( 0 == ret )
+    {
+        /* send response line */
+        memset(line, 0, sizeof(line));
+        snprintf(line, sizeof(line), "HTTP/1.1 %d %s\r\n", http.res.status, _httpStatus(http.res.status));
+        send(clientSocket, line, strlen(line), 0);
+
+        /* send response headers */
+        if ( 0 != strlen(http.res.header) )
+        {
+            send(clientSocket, http.res.header, strlen(http.res.header), 0);
+        }
+
+        send(clientSocket, "\r\n", strlen("\r\n"), 0);
+
+        /* send response body if needed */
+        if ( NULL != http.res.body )
+        {
+            send(clientSocket, http.res.body, strlen(http.res.body), 0);
+            free(http.res.body);
+            http.res.body = NULL;
+        }
+    }
+    else
+    {
+        // ! catch error
+    }
 
     close(clientSocket);
     fprintf(stdout, "[INFO] connection closed\n");
@@ -165,7 +331,7 @@ int main(int argc, char *argv[])
 
         fprintf(stdout, "[INFO] connection accepted from %s:%d\n", inet_ntoa(clientSockAddr.sin_addr), ntohs(clientSockAddr.sin_port));
 
-        ret = thrd_create(&threadId, (thrd_start_t)handler, (void *)clientSocket);
+        ret = thrd_create(&threadId, (thrd_start_t)_httpEntrance, (void *)clientSocket);
         if (thrd_success != ret)
         {
             free(clientSocket);
