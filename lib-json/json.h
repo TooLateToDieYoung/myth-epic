@@ -40,7 +40,7 @@ json_s * jsonMakeStr(char * data);
 json_s * jsonMakeArr();
 json_s * jsonMakeObj();
 
-void jsonFree(json_s * refs);
+void jsonFree(void * refs);
 
 json_s * jsonSetBoo(json_s * refs, bool data);
 json_s * jsonSetInt(json_s * refs, long data);

@@ -19,9 +19,7 @@ struct list_s
     node_s *curr;
     size_t record;
     size_t length;
-    size_t (*stringify)(void *, char *, size_t);
-    FILE *(*display)(void *, FILE *);
-    int (*release)(void *);
+    void (*release)(void *);
 };
 
 static bool _listTryAccess(list_s *refs, size_t idx);
@@ -30,27 +28,22 @@ static void _listQuickSort(node_s *head, node_s *tail, int (*compare)(void *, vo
 /* public */
 list_s *
 listMake(
-    size_t (*stringify)(void *, char *, size_t),
-    FILE *(*display)(void *, FILE *),
-    int (*release)(void *)
+    void (*release)(void *)
 ) {
-assert(stringify);
-assert(display);
 assert(release);
 
     list_s *const refs = (list_s *)calloc(1, sizeof(list_s));
     if (refs)
     {
-        refs->stringify = stringify;
-        refs->display = display;
         refs->release = release;
     }
 
     return refs;
 }
 
-void listFree(
-    list_s *refs
+void 
+listFree(
+    void *refs
 ) {
     if (refs)
     {
@@ -68,8 +61,11 @@ listStringify(
     list_s * refs,
     char * buffer,
     size_t size,
-    char *sign
+    char * sign,
+    size_t (*stringify)(void *, char *, size_t)
 ) {
+assert(stringify);
+
     size_t ret = 0;
     node_s *temp = NULL;
     char * position = buffer ? buffer : NULL;
@@ -82,22 +78,25 @@ listStringify(
             temp != refs->tail; 
             temp = temp->r
         ) {
-            ret += refs->stringify(temp->val, position, boundary);
+            ret += stringify(temp->val, position, boundary);
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
             ret += snprintf(position, boundary, "%s", sign);
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
         }
-        ret += refs->stringify(refs->tail->val, position, boundary);
+        ret += stringify(refs->tail->val, position, boundary);
     }
-
+    
+__exit:
     return ret;
 }
 
@@ -105,8 +104,11 @@ FILE *
 listDisplay(
     list_s *refs,
     FILE *stream,
-    char *sign
+    char *sign,
+    FILE *(*display)(void *, FILE *)
 ) {
+assert(display);
+
     node_s *temp = NULL;
 
     if (listLength(refs))
@@ -118,10 +120,10 @@ listDisplay(
                 temp != refs->tail; 
                 temp = temp->r
             ) {
-                refs->display(temp->val, stream);
+                display(temp->val, stream);
                 fprintf(stream, "%s", sign);
             }
-            refs->display(refs->tail->val, stream);
+            display(refs->tail->val, stream);
         }
     }
 
@@ -198,12 +200,11 @@ listAccess(
     return _listTryAccess(refs, idx) ? refs->curr->val : NULL;
 }
 
-int 
+list_s * 
 listRemove(
     list_s *refs,
     size_t idx
 ) {
-    int ret = -1;
     node_s *target = NULL;
 
     if (_listTryAccess(refs, idx))
@@ -237,14 +238,13 @@ listRemove(
             refs->record = idx;
         }
 
-        ret = refs->release(target->val);
-
+        refs->release(target->val);
         free(target);
 
         refs->length--;
     }
 
-    return ret;
+    return refs;
 }
 
 list_s *

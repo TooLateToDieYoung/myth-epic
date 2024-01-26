@@ -23,15 +23,12 @@ typedef struct list_s list_s;
 /**
  * @brief 
  * 
- * @param display 
  * @param release 
  * @return list_s* 
  */
 list_s * 
 listMake(
-    size_t (*stringify)(void *, char *, size_t),
-    FILE * (*display)(void *, FILE *),
-    int (*release)(void *)
+    void (*release)(void *)
 );
 
 /**
@@ -41,7 +38,7 @@ listMake(
  */
 void 
 listFree(
-    list_s * refs
+    void * refs
 );
 
 /**
@@ -51,6 +48,7 @@ listFree(
  * @param buffer 
  * @param size 
  * @param sign 
+ * @param stringify 
  * @return size_t 
  */
 size_t
@@ -58,7 +56,8 @@ listStringify(
     list_s * refs,
     char * buffer,
     size_t size,
-    char * sign
+    char * sign,
+    size_t (*stringify)(void *, char *, size_t)
 );
 
 /**
@@ -67,13 +66,15 @@ listStringify(
  * @param refs 
  * @param stream 
  * @param sign 
+ * @param display 
  * @return FILE* 
  */
 FILE * 
 listDisplay(
     list_s * refs, 
     FILE * stream,
-    char * sign
+    char * sign,
+    FILE * (*display)(void *, FILE *)
 );
 
 /**
@@ -109,9 +110,9 @@ listAccess(
  * 
  * @param refs 
  * @param idx 
- * @return int 
+ * @return list_s* 
  */
-int 
+list_s *
 listRemove(
     list_s * refs, 
     size_t idx

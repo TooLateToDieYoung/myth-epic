@@ -29,8 +29,6 @@ static json_s * _jsonMake(json_e type);
 
 static size_t _jsonArrStringifyHandler(void * val, char * buffer, size_t size);
 static FILE * _jsonArrDisplayHandler(void * val, FILE * stream);
-static int _jsonArrReleaseHandler(void * val);
-static int _jsonArrCompareHandler(void * valA, void * valB);
 
 static size_t _jsonObjStringifyHandler(void * val, char * buffer, size_t size);
 static FILE * _jsonObjDisplayHandler(void * val, FILE * stream);
@@ -75,7 +73,7 @@ size_t jsonStringify(json_s * refs, char * buffer, size_t size)
                 position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
             }
-            ret += listStringify(refs->data.arr, position, boundary, ",");
+            ret += listStringify(refs->data.arr, position, boundary, ",", _jsonArrStringifyHandler);
             if (buffer)
             {
                 position = buffer + ret;
@@ -125,7 +123,10 @@ json_s * jsonParseFromFile(char * filename)
             content = (char *)calloc(len + 1, sizeof(char));
             if ( NULL != content )
             {
-                fread(content, sizeof(char), len, fd);
+                if ( len != fread(content, sizeof(char), len, fd) )
+                {
+                    // ! catch error
+                }
                 ret = jsonParseByString(content, NULL);
             }
             fclose(fd);
@@ -332,7 +333,7 @@ FILE * jsonDump(json_s * refs, FILE * stream)
 
         case JArr:
             fprintf(stream, "[");
-            listDisplay(refs->data.arr, stream, ",");
+            listDisplay(refs->data.arr, stream, ",", _jsonArrDisplayHandler);
             fprintf(stream, "]");
             break;
 
@@ -430,11 +431,7 @@ json_s * jsonMakeArr()
     json_s * refs = _jsonMake(JArr);
     if ( NULL != refs )
     {
-        refs->data.arr = listMake(
-            _jsonArrStringifyHandler,
-            _jsonArrDisplayHandler,
-            _jsonArrReleaseHandler
-        );
+        refs->data.arr = listMake(jsonFree);
         if ( NULL == refs->data.arr )
         {
             jsonFree(refs);
@@ -465,20 +462,21 @@ json_s * jsonMakeObj()
     return refs;
 }
 
-void jsonFree(json_s * refs)
+void jsonFree(void * refs)
 {
+    json_s * const jptr = (json_s *)refs;
     switch ( jsonType(refs) )
     {
         case JStr:
-            if ( NULL != refs->data.str ) { free(refs->data.str); }
+            if ( NULL != jptr->data.str ) { free(jptr->data.str); }
             break;
 
         case JArr:
-            listFree(refs->data.arr);
+            listFree(jptr->data.arr);
             break;
         
         case JObj:
-            treeFree(refs->data.obj);
+            treeFree(jptr->data.obj);
             break;
 
         default:
@@ -719,12 +717,7 @@ static FILE * _jsonArrDisplayHandler(void * val, FILE * stream)
 {
     return jsonDump((json_s *)val, stream);
 }
-static int _jsonArrReleaseHandler(void * val)
-{
-    if ( NULL != val ) { jsonFree(val); }
-
-    return 0;
-}
+/*
 static int _jsonArrCompareHandler(void * valA, void * valB)
 {
     json_s * const jValA = (json_s *)valA;
@@ -766,6 +759,7 @@ static int _jsonArrCompareHandler(void * valA, void * valB)
 
     return 0;
 }
+*/
 
 static size_t _jsonObjStringifyHandler(void * val, char * buffer, size_t size)
 {

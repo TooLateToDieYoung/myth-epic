@@ -1,6 +1,7 @@
 /* C89 Std. */
 #include <errno.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -17,6 +18,11 @@
 #include "list.h"
 
 #define BUFFER_SIZE 128
+
+static size_t _httpHeaderStringify(void * val, char * buffer, size_t size)
+{
+    return (size_t)snprintf(buffer, size, "%s\r\n", (char *)val);
+}
 
 static int _httpRecvUntil(int srcSocket, char dstbuf[], size_t dstBufLen, const char * const dstEndStr)
 {
@@ -82,7 +88,7 @@ static int _httpEntrance(void *param)
     free(param);
 
     int ret = -1;
-    char path[BUFFER_SIZE] = "/";
+    char path[BUFFER_SIZE] = {0};
     http_s http = {0};
 
     /* get request line */
@@ -101,7 +107,7 @@ static int _httpEntrance(void *param)
         part = strtok(NULL, " ");
         if ( NULL != part )
         {
-            strncpy(path, part, sizeof(path));
+            strncpy(path, part, sizeof(path) - 1);
         }
 
         part = strtok(NULL, " ");
@@ -116,6 +122,7 @@ static int _httpEntrance(void *param)
     }
 
     /* get request headers */
+    char * endPtr = NULL;
     size_t contentLength = 0;
     ret = _httpRecvUntil(clientSocket, http.req.header, sizeof(http.req.header), "\r\n\r\n");
     if ( ret > 0 )
@@ -125,7 +132,6 @@ static int _httpEntrance(void *param)
         const char * const headerPtr = strstr(http.req.header, "Content-Type:"); 
         if ( NULL != headerPtr )
         {
-            char * endPtr = NULL;
             contentLength = (size_t)strtoull(headerPtr + strlen("Content-Type:"), &endPtr, 10);
             if ( NULL == endPtr || isgraph(*endPtr) )
             { 
@@ -145,56 +151,55 @@ static int _httpEntrance(void *param)
         http.req.body = (char *)calloc(contentLength, sizeof(char));
         ret = recv(clientSocket, http.req.body, contentLength, 0);
     }
-#if 0 // ? Still has some problem: listMake() doesn't accept NULL
     else if ( NULL != strstr(http.req.header, "Transfer-Encoding:") )
     {
-        list_s * const list = listMake(NULL, NULL, free);
+        list_s * const list = listMake(free);
         if ( NULL != list )
         {
-            char * item = NULL;
-            char temp[BUFFER_SIZE] = {0};
-            size_t partialLen = 0;
+            char * chunkData = NULL;
+            char chunkInfo[BUFFER_SIZE] = {0};
+            size_t chunkSize = 0;
             do {
-                memset(temp, 0, sizeof(temp));
+                memset(chunkInfo, 0, sizeof(chunkInfo));
 
-                ret = _httpRecvUntil(clientSocket, temp, sizeof(temp), "\r\n");
+                ret = _httpRecvUntil(clientSocket, chunkInfo, sizeof(chunkInfo), "\r\n");
                 if ( ret > 0 )
                 {
-                    partialLen = strtoull(temp, NULL, 10);
+                    chunkSize = strtoull(chunkInfo, &endPtr, 16);
+                    if ( NULL == endPtr || isgraph(*endPtr) )
+                    { 
+                        // ! catch error
+                    }
                 }
                 else
                 {
                     // ! catch error
                 }
 
-                item = (char *)calloc(partialLen, sizeof(char));
-                if ( NULL == item )
+                chunkData = (char *)calloc(chunkSize, sizeof(char));
+                if ( NULL == chunkData )
                 {
                     // ! catch error
                 }
 
-                ret = recv(clientSocket, item, partialLen, 0);
+                ret = recv(clientSocket, chunkData, chunkSize, 0);
                 if ( ret > 0 )
                 {
-                    listInsert(list, ~0, item);
+                    listInsert(list, ~0, chunkData);
                 }
                 else
                 {
                     // ! catch error
-                    free(item);
+                    free(chunkData);
                 }
                 
-                contentLength += partialLen;
-            } while ( 0 != partialLen );
+            } while ( 0 != chunkSize );
 
+            contentLength = listStringify(list, NULL, 0, "", _httpHeaderStringify);
             if ( contentLength > 0 )
             {
                 http.req.body = (char *)calloc(contentLength, sizeof(char));
-                for ( size_t idx = 0; listLength(list) > idx; ++idx )
-                {
-                    strncat(http.req.body, listAccess(list, idx), contentLength);
-                }
-
+                listStringify(list, http.req.body, contentLength, "", _httpHeaderStringify);
                 listFree(list);
             }
         }
@@ -203,7 +208,6 @@ static int _httpEntrance(void *param)
             // ! catch error
         }
     }
-#endif
     else
     {
         // TODO: how to recv an undefined length body
