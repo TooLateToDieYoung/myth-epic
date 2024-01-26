@@ -27,6 +27,8 @@ struct json_s {
 
 static json_s * _jsonMake(json_e type);
 
+static char * _jsonStrDuplicates(const char * const src);
+
 static size_t _jsonArrStringifyHandler(void * val, char * buffer, size_t size);
 static FILE * _jsonArrDisplayHandler(void * val, FILE * stream);
 
@@ -135,12 +137,13 @@ json_s * jsonParseFromFile(char * filename)
 
     return ret;
 }
-json_s * jsonParseByString(char * string, char ** endptr)
+json_s * jsonParseByString(const char * const string, const char ** endptr)
 {
     json_s * ret = NULL;
-    char * head = string;
-    char * tail = head;
-    char temp = '\0';
+    const char * head = string;
+    const char * tail = head;
+    const char * temp = NULL;
+    char * chk = NULL;
     double num = 0.0f;
     char * key = NULL;
     json_s * val = NULL;
@@ -156,11 +159,7 @@ json_s * jsonParseByString(char * string, char ** endptr)
             head++;
             tail = strchr(head, '"');
             if ( NULL == tail ) { goto __error; }
-            
-            temp = *tail;
-            *tail = '\0';
             ret = jsonMakeStr(head);
-            *tail = temp;
             tail++;
             break;
         }
@@ -204,17 +203,12 @@ json_s * jsonParseByString(char * string, char ** endptr)
         case '7':
         case '8':
         case '9': {
-            num = strtod(head, &tail);
-            if ( NULL == tail ) { goto __error; }
+            num = strtod(head, &chk);
+            if ( NULL == chk ) { goto __error; }
+            else { tail = chk; }
             if ( isgraph(*tail) && !strchr(",]}", *tail) ) { goto __error; }
-            temp = *tail;
-            *tail = '\0';
-            ret = ( 
-                NULL != strchr(head, '.') ||
-                NULL != strchr(head, 'e') || 
-                NULL != strchr(head, 'E') 
-            ) ? jsonMakeFlt(num) : jsonMakeInt((long)num) ;
-            *tail = temp;
+            for ( temp = head; tail != temp && NULL == strchr(".eE", *temp); ++temp ) { } 
+            ret = strchr(".eE", *temp) ? jsonMakeFlt(num) : jsonMakeInt((long)num) ;
             break;
         }
 
@@ -248,16 +242,13 @@ json_s * jsonParseByString(char * string, char ** endptr)
                 if ( '"' != *head ) { goto __error; }
 
                 head++;
-                tail = strchr(head, '"'); // TODO: maybe better?
-                if ( NULL == tail ) { goto __error; }
+                for ( tail = head; '"' != *tail; ++tail ) 
+                {
+                    if ( !isgraph(*tail) ) { goto __error; }
+                }
 
-                key = (char *)calloc(tail - head + 1, sizeof(char));
+                key = _jsonStrDuplicates(head);
                 if ( NULL == key ) { goto __error; }
-
-                temp = *tail;
-                *tail = '\0';
-                strcpy(key, head);
-                *tail = temp;
 
                 /* val */
                 for ( head = tail + 1; '\0' != *head && !isgraph(*head); head++ ) { }
@@ -407,18 +398,15 @@ json_s * jsonMakeFlt(double data)
 
     return refs;
 }
-json_s * jsonMakeStr(char * data)
+json_s * jsonMakeStr(const char * const data)
 {
     json_s * refs = _jsonMake(JStr);
     if ( NULL != refs )
     {
-        refs->data.str = (char *)calloc(strlen(data) + 1, sizeof(char));
-        if ( NULL != refs->data.str )
+        refs->data.str = _jsonStrDuplicates(data);
+        if ( NULL == refs->data.str )
         {
-            strcpy(refs->data.str, data);
-        }
-        else // ! Error
-        {
+            // ! catch error
             jsonFree(refs);
             refs = NULL;
         }
@@ -513,14 +501,14 @@ json_s * jsonSetStr(json_s * refs, char * data)
     char * const temp = refs->data.str;
     if ( JStr == jsonType(refs) )
     {
-        refs->data.str = (char *)calloc(strlen(data) + 1, sizeof(char));
+        refs->data.str = _jsonStrDuplicates(data);
         if ( NULL != refs->data.str )
         {
-            strcpy(refs->data.str, data);
             free(temp);
         }
         else
         {
+            // ! catch error: revert to orignal string
             refs->data.str = temp;
         }
     }
@@ -649,11 +637,10 @@ json_s * jsonObjInsert(json_s * refs, char * key, json_s * val)
     pair_s * const pair = (pair_s *)calloc(1, sizeof(pair_s));
     if ( NULL != pair )
     {
-        pair->key = (char *)calloc(strlen(key) + 1, sizeof(char));
+        pair->key = _jsonStrDuplicates(key);
         pair->val = val;
         if ( NULL != pair->key )
         {
-            strcpy(pair->key, key);
             if ( refs->data.obj == treeInsert(refs->data.obj, pair) )
             {
                 ret = refs; // ? successed
@@ -702,6 +689,20 @@ static json_s * _jsonMake(json_e type)
     }
 
     return refs;
+}
+
+static char * _jsonStrDuplicates(const char * const src)
+{
+    char * dst = NULL;
+    if ( NULL != src )
+    {
+        size_t idx = 0;
+        while ( isprint(src[idx]) && '"' != src[idx] ) { ++idx; }
+        dst = (char *)calloc(idx + 1, sizeof(char));
+        if ( NULL != dst ) { strncpy(dst, src, idx); }
+    }
+
+    return dst;
 }
 
 static size_t _jsonArrStringifyHandler(void * val, char * buffer, size_t size)

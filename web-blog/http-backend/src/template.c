@@ -56,7 +56,7 @@ static int _get(http_s * const refs)
         sizeof(refs->res.header)
     );
 
-    json_s * const jobj = jsonMakeObj();
+    json_s * const jobj = jsonParseByString("{ \"arr\": [ \"string\", 12e-4, 629, {} ] }", NULL);
     if ( NULL != jobj )
     {
         if ( jobj == jsonObjInsert(jobj, "template", jsonMakeBoo(true)) )

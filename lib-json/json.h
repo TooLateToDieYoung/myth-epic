@@ -26,7 +26,7 @@ typedef struct json_s json_s;
 size_t jsonStringify(json_s * refs, char * buffer, size_t size);
 
 json_s * jsonParseFromFile(char * filename);
-json_s * jsonParseByString(char * string, char ** endptr);
+json_s * jsonParseByString(const char * const string, const char ** endptr);
 
 FILE * jsonDump(json_s * refs, FILE * stream);
 
@@ -36,7 +36,7 @@ json_s * jsonMakeNul();
 json_s * jsonMakeBoo(bool data);
 json_s * jsonMakeInt(long data);
 json_s * jsonMakeFlt(double data);
-json_s * jsonMakeStr(char * data);
+json_s * jsonMakeStr(const char * const data);
 json_s * jsonMakeArr();
 json_s * jsonMakeObj();
 
