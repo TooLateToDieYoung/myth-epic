@@ -89,7 +89,7 @@ size_t jsonStringify(json_s * refs, char * buffer, size_t size)
                 position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
             }
-            ret += treeStringify(refs->data.obj, position, boundary, ",");
+            ret += treeStringify(refs->data.obj, position, boundary, ",", _jsonObjStringifyHandler);
             if (buffer)
             {
                 position = buffer + ret;
@@ -339,7 +339,7 @@ FILE * jsonDump(json_s * refs, FILE * stream)
 
         case JObj:
             fprintf(stream, "{");
-            treeDisplay(refs->data.obj, stream, ",");
+            treeDisplay(refs->data.obj, stream, ",", _jsonObjDisplayHandler);
             fprintf(stream, "}");
             break;
 
@@ -446,12 +446,7 @@ json_s * jsonMakeObj()
     json_s * refs = _jsonMake(JObj);
     if ( NULL != refs )
     {
-        refs->data.obj = treeMake(
-            _jsonObjStringifyHandler,
-            _jsonObjDisplayHandler,
-            _jsonObjCompareHandler, 
-            _jsonObjReleaseHandler
-        );
+        refs->data.obj = treeMake(_jsonObjCompareHandler, _jsonObjReleaseHandler);
         if ( NULL == refs->data.obj )
         {
             jsonFree(refs);
@@ -803,14 +798,14 @@ static int _jsonObjReleaseHandler(void * val)
 }
 static int _jsonObjCompareHandler(void * valA, void * valB)
 {
-    pair_s * const pValA = (pair_s *)valA;
-    pair_s * const pValB = (pair_s *)valB;
+    const pair_s * const pValA = (pair_s *)valA;
+    const pair_s * const pValB = (pair_s *)valB;
 
     if ( NULL == pValA ) { return 0; }
     if ( NULL == pValB ) { return 0; }
 
     return strcmp(
-        (char *)(pValA->key), 
-        (char *)(pValB->key)
+        (const char *)(pValA->key), 
+        (const char *)(pValB->key)
     );
 }

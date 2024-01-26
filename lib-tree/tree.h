@@ -23,15 +23,12 @@ typedef struct tree_s tree_s;
 /**
  * @brief 
  * 
- * @param display 
  * @param compare 
  * @param release 
  * @return tree_s* 
  */
 tree_s * 
 treeMake(
-    size_t (*stringify)(void *, char *, size_t),
-    FILE * (*display)(void *, FILE *),
     int (*compare)(void *, void *),
     int (*release)(void *)
 );
@@ -43,7 +40,7 @@ treeMake(
  */
 void 
 treeFree(
-    tree_s * refs
+    void * refs
 );
 
 /**
@@ -53,6 +50,7 @@ treeFree(
  * @param buffer 
  * @param size 
  * @param sign 
+ * @param stringify 
  * @return size_t 
  */
 size_t
@@ -60,7 +58,8 @@ treeStringify(
     tree_s * refs,
     char * buffer,
     size_t size,
-    char * sign
+    char * sign,
+    size_t (*stringify)(void *, char *, size_t)
 );
 
 /**
@@ -75,7 +74,8 @@ FILE *
 treeDisplay(
     tree_s * refs, 
     FILE * stream,
-    char * sign
+    char * sign,
+    FILE * (*display)(void *, FILE *)
 );
 
 /**

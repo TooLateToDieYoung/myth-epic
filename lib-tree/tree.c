@@ -17,8 +17,6 @@ struct tree_s
 {
     node_s *root;
     size_t size;
-    size_t (*stringify)(void *, char *, size_t);
-    FILE *(*display)(void *, FILE *);
     int (*compare)(void *, void *);
     int (*release)(void *);
 };
@@ -34,21 +32,15 @@ static FILE *_treeDumpRecursion(node_s *refs, FILE *stream, char *sign, FILE *(*
 /* public */
 tree_s *
 treeMake(
-    size_t (*stringify)(void *, char *, size_t),
-    FILE *(*display)(void *, FILE *),
     int (*compare)(void *, void *),
     int (*release)(void *)
 ) {
-assert(stringify);
-assert(display);
 assert(compare);
 assert(release);
 
     tree_s *const refs = (tree_s *)calloc(1, sizeof(tree_s));
     if (refs)
     {
-        refs->stringify = stringify;
-        refs->display = display;
         refs->compare = compare;
         refs->release = release;
     }
@@ -58,13 +50,13 @@ assert(release);
 
 void 
 treeFree(
-    tree_s *refs
+    void *refs
 ) {
     if (refs)
     {
         while (treeSize(refs))
         {
-            treeRemove(refs, refs->root->val);
+            treeRemove(refs, ((tree_s *)refs)->root->val);
         }
 
         free(refs);
@@ -76,13 +68,16 @@ treeStringify(
     tree_s * refs,
     char * buffer,
     size_t size,
-    char * sign
+    char * sign,
+    size_t (*stringify)(void *, char *, size_t)
 ) {
+assert(stringify);
+
     size_t ret = 0;
 
     if (treeSize(refs))
     {
-        ret = _treeStringifyRecursion(refs->root, buffer, size, sign, refs->stringify);
+        ret = _treeStringifyRecursion(refs->root, buffer, size, sign, stringify);
     }
 
     return ret;
@@ -92,13 +87,16 @@ FILE *
 treeDisplay(
     tree_s *refs,
     FILE *stream,
-    char *sign
+    char *sign,
+    FILE * (*display)(void *, FILE *)
 ) {
+assert(display);
+
     if (treeSize(refs))
     {
         if (stream)
         {
-            _treeDumpRecursion(refs->root, stream, sign, refs->display);
+            _treeDumpRecursion(refs->root, stream, sign, display);
         }
     }
 
