@@ -1,9 +1,10 @@
-#include "json.h"
-
+/* C89 Std. */
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
+/* Myth Epic Lib. */
+#include "json.h"
 #include "list.h"
 #include "tree.h"
 
@@ -72,14 +73,16 @@ size_t jsonStringify(json_s * refs, char * buffer, size_t size)
             ret += snprintf(position, boundary, "[");
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
             ret += listStringify(refs->data.arr, position, boundary, ",", _jsonArrStringifyHandler);
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
             ret += snprintf(position, boundary, "]");
             break;
@@ -88,20 +91,28 @@ size_t jsonStringify(json_s * refs, char * buffer, size_t size)
             ret += snprintf(position, boundary, "{");
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
             ret += treeStringify(refs->data.obj, position, boundary, ",", _jsonObjStringifyHandler);
             if (buffer)
             {
-                position = buffer + ret;
                 boundary = size > ret ? size - ret : 0;
+                if (!boundary) { goto __exit; }
+                else { position = buffer + ret; }
             }
             ret += snprintf(position, boundary, "}");
             break;
 
         default:
             break;
+    }
+
+__exit:
+    if (buffer)
+    {
+        ret = size > ret ? ret : 0;
     }
 
     return ret;
