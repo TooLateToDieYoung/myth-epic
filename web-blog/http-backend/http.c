@@ -195,7 +195,7 @@ static int _httpEntrance(void *param)
                 
             } while ( 0 != chunkSize );
 
-            contentLength = listStringify(list, NULL, 0, "", _httpHeaderStringify);
+            contentLength = 1 + listStringify(list, NULL, 0, "", _httpHeaderStringify);
             if ( contentLength > 0 )
             {
                 http.req.body = (char *)calloc(contentLength, sizeof(char));

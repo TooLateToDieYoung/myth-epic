@@ -97,6 +97,11 @@ assert(stringify);
     }
     
 __exit:
+    if (buffer)
+    {
+        ret = size > ret ? ret : 0;
+    }
+
     return ret;
 }
 

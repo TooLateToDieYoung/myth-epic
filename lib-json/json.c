@@ -767,10 +767,17 @@ static size_t _jsonObjStringifyHandler(void * val, char * buffer, size_t size)
         ret += snprintf(position, boundary, "\"%s\":", (char *)pair->key);
         if (buffer)
         {
-            position = buffer + ret;
             boundary = size > ret ? size - ret : 0;
+            if (!boundary) { goto __exit; }
+            else { position = buffer + ret; }
         }
         ret += jsonStringify((json_s *)pair->val, position, boundary);
+    }
+
+__exit:
+    if (buffer)
+    {
+        ret = size > ret ? ret : 0;
     }
 
     return ret;

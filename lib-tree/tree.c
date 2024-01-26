@@ -399,14 +399,16 @@ _treeStringifyRecursion(
         ret += _treeStringifyRecursion(refs->l, position, boundary, sign, stringify);
         if (buffer)
         {
-            position = buffer + ret;
             boundary = size > ret ? size - ret : 0;
+            if (!boundary) { goto __exit; }
+            else { position = buffer + ret; }
         }
         ret += snprintf(position, boundary, "%s", sign);
         if (buffer)
         {
-            position = buffer + ret;
             boundary = size > ret ? size - ret : 0;
+            if (!boundary) { goto __exit; }
+            else { position = buffer + ret; }
         }
     }
 
@@ -415,18 +417,28 @@ _treeStringifyRecursion(
         ret += _treeStringifyRecursion(refs->r, position, boundary, sign, stringify);
         if (buffer)
         {
-            position = buffer + ret;
             boundary = size > ret ? size - ret : 0;
+            if (!boundary) { goto __exit; }
+            else { position = buffer + ret; }
         }
         ret += snprintf(position, boundary, "%s", sign);
         if (buffer)
         {
-            position = buffer + ret;
             boundary = size > ret ? size - ret : 0;
+            if (!boundary) { goto __exit; }
+            else { position = buffer + ret; }
         }
     }
 
-    return ret + stringify(refs->val, position, boundary);
+    ret += stringify(refs->val, position, boundary);
+
+__exit:
+    if (buffer)
+    {
+        ret = size > ret ? ret : 0;
+    }
+
+    return ret;
 }
 
 static 
