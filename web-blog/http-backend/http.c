@@ -4,6 +4,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
+/* C99 Std. */
+#include <stdbool.h>
 
 /* C11 Std. */
 #include <threads.h>
@@ -18,6 +22,17 @@
 #include "list.h"
 
 #define BUFFER_SIZE 128
+
+static bool _httpIsWithoutBodyMethod(const http_method_e method)
+{
+    return (
+        method == HMGet ||
+        method == HMHead ||
+        method == HMOption ||
+        method == HMDelete ||
+        method == HMTrace
+    );
+}
 
 static size_t _httpHeaderStringify(void * val, char * buffer, size_t size)
 {
@@ -96,25 +111,50 @@ static int _httpEntrance(void *param)
     ret = _httpRecvUntil(clientSocket, line, sizeof(line), "\r\n");
     if ( ret > 0 )
     {
+        fprintf(stdout, "[INFO] request line: %s", line);
+
         const char * part = NULL;
 
         part = strtok(line, " ");
         if ( NULL != part )
         {
             http.req.method = _httpMethod(part);
+            if ( HMUnknown == http.req.method )
+            {
+                // ! catch error
+            }
         }
 
         part = strtok(NULL, " ");
         if ( NULL != part )
         {
-            strncpy(path, part, sizeof(path) - 1);
+            const char * const queryPtr = strchr(part, '?');
+            const size_t pathLen = ( NULL != queryPtr ) ? ( queryPtr - part ) : strlen(part) ;
+            const size_t queryLen = ( NULL != queryPtr ) ? ( strlen(part) - pathLen - 1 ) : ( 0 ) ;
+            if ( sizeof(path) > pathLen && sizeof(http.query) > queryLen )
+            {
+                if ( NULL == queryPtr )
+                {
+                    sscanf(part, "%s", path);
+                }
+                else
+                {
+                    sscanf(part, "%[^?]%s", path, http.query);
+                }
+            }
+            else
+            {
+                // ! catch error
+            }
         }
 
         part = strtok(NULL, " ");
+#if 0
         if ( NULL != part )
         {
             fprintf(stdout, "[INFO] http request version: %s\n", part);
         }
+#endif
     }
     else
     {
@@ -122,34 +162,43 @@ static int _httpEntrance(void *param)
     }
 
     /* get request headers */
-    char * endPtr = NULL;
-    size_t contentLength = 0;
     ret = _httpRecvUntil(clientSocket, http.req.header, sizeof(http.req.header), "\r\n\r\n");
     if ( ret > 0 )
     {
-        // ? do something check
+        fprintf(stdout, "[INFO] request header: %s", http.req.header);
 
-        const char * const headerPtr = strstr(http.req.header, "Content-Type:"); 
-        if ( NULL != headerPtr )
-        {
-            contentLength = (size_t)strtoull(headerPtr + strlen("Content-Type:"), &endPtr, 10);
-            if ( NULL == endPtr || isgraph(*endPtr) )
-            { 
-                // ! catch error
-            }
-        }
+        // ? do something check
     }
     else
     {
         // ! catch error
     }
 
-    // TODO
     /* get request body */
-    if ( 0 != contentLength )
+    char * endPtr = NULL;
+    size_t contentLength = 0;
+    if ( _httpIsWithoutBodyMethod(http.req.method) )
     {
+        // ? do something and don't care about the body
+    }
+    else if ( NULL != strstr(http.req.header, "Content-Type:") )
+    {
+        const char * const headerPtr = strstr(http.req.header, "Content-Type:"); 
+        contentLength = (size_t)strtoull(headerPtr + strlen("Content-Type:"), &endPtr, 10);
+        if ( NULL == endPtr || isgraph(*endPtr) )
+        { 
+            // ! catch error
+        }
+
         http.req.body = (char *)calloc(contentLength, sizeof(char));
-        ret = recv(clientSocket, http.req.body, contentLength, 0);
+        if ( NULL != http.req.body )
+        {
+            ret = recv(clientSocket, http.req.body, contentLength, 0);
+        }
+        else
+        {
+            // ! catch error
+        }
     }
     else if ( NULL != strstr(http.req.header, "Transfer-Encoding:") )
     {
@@ -199,7 +248,14 @@ static int _httpEntrance(void *param)
             if ( contentLength > 0 )
             {
                 http.req.body = (char *)calloc(contentLength, sizeof(char));
-                listStringify(list, http.req.body, contentLength, "", _httpHeaderStringify);
+                if ( NULL != http.req.body )
+                {
+                    listStringify(list, http.req.body, contentLength, "", _httpHeaderStringify);
+                }
+                else
+                {
+                    // ! catch error
+                }
                 listFree(list);
             }
         }
@@ -218,6 +274,8 @@ static int _httpEntrance(void *param)
     {
         if ( 0 == strcmp(path, api[idx].path) )
         {
+assert(api[idx].handler);
+
             ret = api[idx].handler(&http);
             if ( NULL != http.req.body )
             {
@@ -253,6 +311,7 @@ static int _httpEntrance(void *param)
     }
     else
     {
+        fprintf(stderr, "[ERROR] %s\n", http.msg);
         // ! catch error
     }
 

@@ -25,8 +25,6 @@ int templateHandler(http_s * const refs)
 
     if ( NULL != refs )
     {
-        fprintf(stdout, "[DEBUG] refs->req.header =\n%s\n", refs->req.header);
-
         switch ( refs->req.method )
         {
             case HMGet: { return _get(refs); }
@@ -62,6 +60,7 @@ static int _get(http_s * const refs)
         if ( jobj == jsonObjInsert(jobj, "template", jsonMakeBoo(true)) )
         {
             jsonDump(jobj, stdout);
+            fprintf(stdout, "\n");
         }
         else
         {

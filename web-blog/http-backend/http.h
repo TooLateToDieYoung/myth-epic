@@ -5,6 +5,8 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#define BUFFER_SIZE 128
+
 typedef enum { 
     HMGet, /* get data */
     HMPatch, /* change partial data */
@@ -126,19 +128,21 @@ typedef enum {
 
 typedef struct {
 
+    char query[BUFFER_SIZE];
+
     struct {
         http_method_e method;
-        char header[8096];
+        char header[BUFFER_SIZE * 16];
         char * body;
     } req;
 
     struct {
         http_status_e status;
-        char header[8096];
+        char header[BUFFER_SIZE * 16];
         char * body;
     } res;
 
-    char msg[64]; /* feedback message for handler function */
+    char msg[BUFFER_SIZE]; /* feedback message for handler function */
 } http_s;
 
 #ifdef __cplusplus
