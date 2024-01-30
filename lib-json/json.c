@@ -127,12 +127,12 @@ json_s * jsonParseFromFile(char * filename)
 
     if ( NULL != filename )
     {
-        fd = fopen(filename, "r");
+        fd = fopen(filename, "rb");
         if ( NULL != fd )
         {
             fseek(fd, 0, SEEK_END);
             len = ftell(fd);
-            fseek(fd, 0, SEEK_SET);
+            rewind(fd);
             content = (char *)calloc(len + 1, sizeof(char));
             if ( NULL != content )
             {
@@ -141,6 +141,7 @@ json_s * jsonParseFromFile(char * filename)
                     // ! catch error
                 }
                 ret = jsonParseByString(content, NULL);
+                free(content);
             }
             fclose(fd);
         }
@@ -708,9 +709,9 @@ static char * _jsonStrDuplicates(const char * const src)
     if ( NULL != src )
     {
         size_t idx = 0;
-        while ( isprint(src[idx]) && '"' != src[idx] ) { ++idx; }
+        while ( '\0' != src[idx] && '"' != src[idx] ) { ++idx; }
         dst = (char *)calloc(idx + 1, sizeof(char));
-        if ( NULL != dst ) { strncpy(dst, src, idx); }
+        if ( NULL != dst ) { memcpy(dst, src, idx); }
     }
 
     return dst;
