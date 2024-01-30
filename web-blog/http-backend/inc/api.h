@@ -10,6 +10,7 @@ extern "C" {
 
 /* declare handlers */
 int templateHandler(http_s * const refs);
+int songHandler(http_s * const refs);
 
 /* register api */
 typedef struct {
@@ -19,6 +20,7 @@ typedef struct {
 
 static api_s api[] = {
     { "/template", templateHandler },
+    { "/song", songHandler },
 
 /* end of api */
     {0}
