@@ -37,7 +37,8 @@ static int _get(http_s * const refs)
     json_s * result = NULL;
     const char * queryParam = NULL;
     size_t songId = 0;
-    const char * songName = NULL;
+    json_s * songInfo = NULL;
+    const char * songPath = NULL;
     size_t songLen = 0;
 
     strncat(
@@ -67,18 +68,24 @@ static int _get(http_s * const refs)
             goto __exit; 
         }
 
-        songName = jsonGetStr(jsonArrAccess(menu, songId));
-        if ( NULL == songName ) 
+        songInfo = jsonArrAccess(menu, songId);
+        if ( NULL == songInfo ) 
         { 
             snprintf(refs->msg, sizeof(refs->msg), "cannot find song id = %zu", songId) ;
             goto __exit; 
         }
-        else
 
-        result = jsonParseFromFile(songName);
+        songPath = jsonGetStr(jsonObjAccess(songInfo, "path"));
+        if ( NULL == songPath ) 
+        { 
+            snprintf(refs->msg, sizeof(refs->msg), "internal error") ;
+            goto __exit; 
+        }
+
+        result = jsonParseFromFile(songPath);
         if ( NULL == result ) 
         { 
-            snprintf(refs->msg, sizeof(refs->msg), "cannot parse json: %s", songName) ;
+            snprintf(refs->msg, sizeof(refs->msg), "cannot parse json: %s", songPath) ;
             goto __exit; 
         }
     }

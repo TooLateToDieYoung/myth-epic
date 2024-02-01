@@ -4,7 +4,7 @@ export default createRouter({
     history: createWebHistory(),
     routes: [
         {
-            path: '/Home',
+            path: '/home',
             name: 'Home',
             component: () => import('../components/Home.vue')
         },
@@ -13,8 +13,14 @@ export default createRouter({
             redirect: '/Home'
         },
         {
-            path: '/Lyrics/:name',
-            component: () => import('../components/Lyrics.vue')
+            path: '/song',
+            name: 'Song',
+            component: () => import('../components/song/Song.vue')
+        },
+        {
+            path: '/song/lyrics/:id',
+            name: 'Lyrics',
+            component: () => import('../components/song/Lyrics.vue')
         }
     ]
 });

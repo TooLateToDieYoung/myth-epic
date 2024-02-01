@@ -1,19 +1,16 @@
 <script setup>
 import { ref, onBeforeMount } from 'vue'
-// import { useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 
-import Line from './Line.vue'
+import Line from '../Line.vue'
 
-import lyrics from '../assets/json/inochinikirawareteiru.json'
+const route = useRoute();
 
-// const route = useRoute();
+const song = ref({});
 
-const song = ref(lyrics);
-
-/*
-const getSong = async function (path) {
+const getSong = async function (id) {
     try {
-        const res = await fetch('http://127.0.0.1:1204/' + path);
+        const res = await fetch('http://127.0.0.1:1204/song?id=' + id);
         if (!res.ok) {
             throw 'fetch failed'
         }
@@ -24,10 +21,9 @@ const getSong = async function (path) {
         return { name: "N/A", singer: "N/A", lyrics: [] };
     }
 }
-*/
 
 onBeforeMount(async function () {
-    song.value = await getSong(route.params.name);
+    song.value = await getSong(route.params.id);
 });
 </script>
 

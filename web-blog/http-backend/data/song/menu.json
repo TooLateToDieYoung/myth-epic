@@ -1,3 +1,6 @@
 [
-    "data/song/inochinikirawareteiru.json"
+    {
+        "title": "命に嫌われている",
+        "path": "data/song/inochinikirawareteiru.json"
+    }
 ]
