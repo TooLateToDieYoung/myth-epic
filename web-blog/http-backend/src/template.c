@@ -13,7 +13,7 @@ static int _patch(http_s * const refs);
 static int _put(http_s * const refs);
 static int _post(http_s * const refs);
 static int _delete(http_s * const refs);
-static int _option(http_s * const refs);
+static int _options(http_s * const refs);
 static int _head(http_s * const refs);
 static int _connect(http_s * const refs);
 static int _trace(http_s * const refs);
@@ -32,7 +32,7 @@ int templateHandler(http_s * const refs)
             case HMPut: { return _put(refs); }
             case HMPost: { return _post(refs); }
             case HMDelete: { return _delete(refs); }
-            case HMOption: { return _option(refs); }
+            case HMOptions: { return _options(refs); }
             case HMHead: { return _head(refs); }
             case HMConnect: { return _connect(refs); }
             case HMTrace: { return _trace(refs); }
@@ -104,7 +104,7 @@ static int _delete(http_s * const refs)
     // TODO
     return 0;
 }
-static int _option(http_s * const refs)
+static int _options(http_s * const refs)
 {
     // TODO
     return 0;

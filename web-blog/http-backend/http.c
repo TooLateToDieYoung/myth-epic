@@ -28,7 +28,7 @@ static bool _httpIsWithoutBodyMethod(const http_method_e method)
     return (
         method == HMGet ||
         method == HMHead ||
-        method == HMOption ||
+        method == HMOptions ||
         method == HMDelete ||
         method == HMTrace
     );
@@ -68,7 +68,7 @@ static http_method_e _httpMethod(const char * const method)
         if ( 0 == strcmp(method, "PUT") ) { return HMPut; }
         if ( 0 == strcmp(method, "POST") ) { return HMPost; }
         if ( 0 == strcmp(method, "DELETE") ) { return HMDelete; }
-        if ( 0 == strcmp(method, "OPTION") ) { return HMOption; }
+        if ( 0 == strcmp(method, "OPTIONS") ) { return HMOptions; }
         if ( 0 == strcmp(method, "HEAD") ) { return HMHead; }
         if ( 0 == strcmp(method, "CONNECT") ) { return HMConnect; }
         if ( 0 == strcmp(method, "TRACE") ) { return HMTrace; }

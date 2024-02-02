@@ -13,7 +13,7 @@ typedef enum {
     HMPut, /* overwrite data */
     HMPost, /* create new data */
     HMDelete, /* delete data */
-    HMOption, /* communication option */
+    HMOptions, /* communication option */
     HMHead, /* same as method 'GET', but without response body */
     HMConnect, /* do handshake to make the tunnel */
     HMTrace, /* do loop-back test */
