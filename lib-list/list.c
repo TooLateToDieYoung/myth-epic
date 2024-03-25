@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <stdlib.h>
 #include <stdbool.h>
 
 #include "list.h"
@@ -7,186 +6,129 @@
 typedef struct node_s node_s;
 struct node_s
 {
-    void *val;
-    node_s *l;
-    node_s *r;
+    void * pvValue;
+    size_t zXor;
 };
 
 struct list_s
 {
-    node_s *head;
-    node_s *tail;
-    node_s *curr;
-    size_t record;
-    size_t length;
-    void (*release)(void *);
+    pool_s * psPool;
+    void (*pfFree)(void *);
+
+    node_s * psHead;
+    node_s * psTail;
+    size_t zLength;
+
+    node_s * psPrev;
+    node_s * psCurr;
+    node_s * psNext;
+    size_t zRecord;
 };
 
-static bool _listTryAccess(list_s *refs, size_t idx);
-static void _listQuickSort(node_s *head, node_s *tail, int (*compare)(void *, void *));
+static bool _listTryAccess(list_s * const psRefs, const size_t zIndex);
+static void _listQuickSort(node_s * const psHead, node_s * const psTail, int (*pfCompare)(void *, void *));
 
 /* public */
 list_s *
 listMake(
-    void (*release)(void *)
+    pool_s * const psPool,
+    void (*pfFree)(void *)
 ) {
-assert(release);
+assert(pfFree);
 
-    list_s *const refs = (list_s *)calloc(1, sizeof(list_s));
-    if (refs)
+    list_s * const psRefs = (list_s *)poolAlloc(psPool, sizeof(list_s));
+    if ( NULL != psRefs )
     {
-        refs->release = release;
+        psRefs->psPool = psPool;
+        psRefs->pfFree = pfFree;
+        psRefs->psHead = psRefs->psTail = psRefs->psPrev = psRefs->psCurr = psRefs->psNext = NULL;
+        psRefs->zLength = psRefs->zRecord = 0;
     }
 
-    return refs;
+    return psRefs;
 }
 
 void 
 listFree(
-    void *refs
+    void * pvRefs
 ) {
-    if (refs)
+    list_s * psRefs = NULL;
+
+    if ( NULL != pvRefs )
     {
-        while (listLength(refs))
+        psRefs = (list_s *)pvRefs;
+
+        while ( listLength(psRefs) > 0 )
         {
-            listRemove(refs, 0);
+            listRemove(psRefs, 0);
         }
 
-        free(refs);
+        poolErase(psRefs->psPool, pvRefs);
     }
 }
 
-size_t
-listStringify(
-    list_s * refs,
-    char * buffer,
-    size_t size,
-    char * sign,
-    size_t (*stringify)(void *, char *, size_t)
+void *
+listAccess(
+    list_s * const psRefs, 
+    const size_t zIndex
 ) {
-assert(stringify);
-
-    size_t ret = 0;
-    node_s *temp = NULL;
-    char * position = buffer ? buffer : NULL;
-    size_t boundary = position ? size : 0;
-
-    if (listLength(refs))
-    {
-        for (
-            temp = refs->head; 
-            temp != refs->tail; 
-            temp = temp->r
-        ) {
-            ret += stringify(temp->val, position, boundary);
-            if (buffer)
-            {
-                boundary = size > ret ? size - ret : 0;
-                if (!boundary) { goto __exit; }
-                else { position = buffer + ret; }
-            }
-            ret += snprintf(position, boundary, "%s", sign);
-            if (buffer)
-            {
-                boundary = size > ret ? size - ret : 0;
-                if (!boundary) { goto __exit; }
-                else { position = buffer + ret; }
-            }
-        }
-        ret += stringify(refs->tail->val, position, boundary);
-    }
-    
-__exit:
-    if (buffer)
-    {
-        ret = size > ret ? ret : 0;
-    }
-
-    return ret;
-}
-
-FILE *
-listDisplay(
-    list_s *refs,
-    FILE *stream,
-    char *sign,
-    FILE *(*display)(void *, FILE *)
-) {
-assert(display);
-
-    node_s *temp = NULL;
-
-    if (listLength(refs))
-    {
-        if (stream)
-        {
-            for (
-                temp = refs->head; 
-                temp != refs->tail; 
-                temp = temp->r
-            ) {
-                display(temp->val, stream);
-                fprintf(stream, "%s", sign);
-            }
-            display(refs->tail->val, stream);
-        }
-    }
-
-    return stream;
+    return _listTryAccess(psRefs, zIndex) ? ( psRefs->psCurr->pvValue ) : ( NULL ) ;
 }
 
 list_s *
 listInsert(
-    list_s *refs,
-    size_t idx,
-    void *val
+    list_s * const psRefs, 
+    const size_t zIndex, 
+    void * const pvValue
 ) {
-    node_s *target = NULL;
+    node_s * psTarget = NULL;
 
-    if (refs)
+    if ( NULL != psRefs )
     {
-        target = (node_s *)calloc(1, sizeof(node_s));
-        if (target)
+        psTarget = (node_s *)poolAlloc(psRefs->psPool, sizeof(node_s));
+        if ( NULL != psTarget )
         {
-            target->val = val;
+            psTarget->pvValue = pvValue;
 
-            if (0 == refs->length)
+            if ( 0 == listLength(psRefs) )
             {
-                refs->curr = refs->head = refs->tail = target;
-                refs->record = 0;
+                psRefs->psCurr = psRefs->psHead = psRefs->psTail = psTarget;
+                psRefs->zRecord = 0;
             }
-            else if (idx == 0) // ? in front of the head
+            else if ( zIndex == 0 ) // ? in front of the head
             {
-                target->r = refs->head;
-                refs->head->l = target;
-                refs->curr = refs->head = target;
-                refs->record = 0;
+                psTarget->zXor = (size_t)( psRefs->psHead );
+                psRefs->psHead->zXor ^= (size_t)( psTarget );
+                psRefs->psCurr = psRefs->psHead = psTarget;
+                psRefs->zRecord = 0;
             }
-            else if (idx >= refs->length) // ? append to the tail
+            else if ( zIndex >= listLength(psRefs) ) // ? append to the tail
             {
-                target->l = refs->tail;
-                refs->tail->r = target;
-                refs->curr = refs->tail = target;
-                refs->record = refs->length;
+                psTarget->zXor = (size_t)( psRefs->psTail );
+                psRefs->psTail->zXor ^= (size_t)( psTarget );
+                psRefs->psCurr = psRefs->psTail = psTarget;
+                psRefs->zRecord = listLength(psRefs);
             }
-            else if (_listTryAccess(refs, idx))
+            else if ( true == _listTryAccess(psRefs, zIndex) )
             {
-                target->l = refs->curr->l;
-                target->r = refs->curr;
+                psTarget->zXor = ( (size_t)( psRefs->psPrev ) ^ (size_t)( psRefs->psCurr ) );
 
-                target->l->r = target;
-                target->r->l = target;
+                psRefs->psPrev->zXor ^= (size_t)( psRefs->psCurr );
+                psRefs->psPrev->zXor ^= (size_t)( psTarget );
 
-                refs->curr = target;
-                refs->record = idx;
+                psRefs->psCurr->zXor ^= (size_t)( psRefs->psPrev );
+                psRefs->psCurr->zXor ^= (size_t)( psTarget );
+
+                psRefs->psCurr = psTarget;
+                psRefs->zRecord = zIndex;
             }
             else // ! Error: cannot find correct position
             {
-                free(target);
+                poolErase(psRefs->psPool, psTarget);
                 return NULL;
             }
 
-            refs->length++;
+            psRefs->zLength++;
         }
         else  // ! Error: calloc failed
         {
@@ -194,201 +136,186 @@ listInsert(
         }
     }
 
-    return refs;
-}
-
-void *
-listAccess(
-    list_s *refs,
-    size_t idx
-) {
-    return _listTryAccess(refs, idx) ? refs->curr->val : NULL;
-}
-
-list_s * 
-listRemove(
-    list_s *refs,
-    size_t idx
-) {
-    node_s *target = NULL;
-
-    if (_listTryAccess(refs, idx))
-    {
-        target = refs->curr;
-
-        if (1 == refs->length)
-        {
-            refs->curr = refs->head = refs->tail = NULL;
-            refs->record = 0;
-        }
-        else if (idx == 0)
-        {
-            refs->head = refs->head->r;
-            refs->head->l = NULL;
-            refs->curr = refs->head;
-            refs->record = 0;
-        }
-        else if (idx == refs->length - 1)
-        {
-            refs->tail = refs->tail->l;
-            refs->tail->r = NULL;
-            refs->curr = refs->tail;
-            refs->record = idx - 1;
-        }
-        else
-        {
-            target->l->r = target->r;
-            target->r->l = target->l;
-            refs->curr = target->r;
-            refs->record = idx;
-        }
-
-        refs->release(target->val);
-        free(target);
-
-        refs->length--;
-    }
-
-    return refs;
+    return psRefs;
 }
 
 list_s *
 listChange(
-    list_s *refs,
-    size_t idx,
-    void *val
+    list_s * const psRefs, 
+    const size_t zIndex, 
+    void * const pvValue
 ) {
-    list_s *ret = refs;
+    list_s * psRet = psRefs;
 
-    if (_listTryAccess(refs, idx))
+    if ( true != _listTryAccess(psRefs, zIndex) )
     {
-        (void)refs->release(refs->curr->val);
-        refs->curr->val = val;
+        return listInsert(psRefs, zIndex, pvValue);
     }
     else
     {
-        ret = listInsert(refs, idx, val);
+        psRefs->pfFree(psRefs->psCurr->pvValue);
+        psRefs->psCurr->pvValue = pvValue;
     }
 
-    return ret;
+    return psRefs;
+}
+
+list_s * 
+listRemove(
+    list_s * const psRefs, 
+    const size_t zIndex
+) {
+    node_s * psTarget = NULL;
+
+    if ( true == _listTryAccess(psRefs, zIndex) )
+    {
+        psTarget = psRefs->psCurr;
+
+        if ( 1 == listLength(psRefs) )
+        {
+            psRefs->psCurr = psRefs->psHead = psRefs->psTail = NULL;
+            psRefs->zRecord = 0;
+        }
+        else if ( zIndex == 0 )
+        {
+            psRefs->psNext->zXor ^= (size_t)( psRefs->psCurr );
+            psRefs->psHead = psRefs->psCurr = psRefs->psNext;
+            psRefs->psNext = (node_s *)( psRefs->psHead->zXor );
+            psRefs->zRecord = 0;
+        }
+        else if ( zIndex == listLength(psRefs) - 1 )
+        {
+            psRefs->psPrev->zXor ^= (size_t)( psRefs->psCurr );
+            psRefs->psTail = psRefs->psCurr = psRefs->psPrev;
+            psRefs->psPrev = (node_s *)( psRefs->psTail->zXor );
+            psRefs->zRecord = zIndex - 1;
+        }
+        else
+        {
+            psRefs->psPrev->zXor ^= (size_t)( psRefs->psCurr );
+            psRefs->psPrev->zXor ^= (size_t)( psRefs->psNext );
+
+            psRefs->psNext->zXor ^= (size_t)( psRefs->psCurr );
+            psRefs->psNext->zXor ^= (size_t)( psRefs->psPrev );
+
+            psRefs->psCurr = psRefs->psNext;
+            psRefs->psNext = (node_s *)( psRefs->psCurr->zXor ^ (size_t)( psRefs->psPrev ) );
+
+            psRefs->zRecord = zIndex;
+        }
+
+        psRefs->pfFree(psTarget->pvValue);
+        poolErase(psRefs->psPool, psTarget);
+
+        psRefs->zLength--;
+    }
+
+    return psRefs;
+}
+
+list_s *
+listRevert(
+    list_s * const psRefs
+) {
+    if ( listLength(psRefs) > 1 )
+    {
+        psRefs->psCurr = psRefs->psTail;
+        psRefs->psTail = psRefs->psHead;
+        psRefs->psHead = psRefs->psCurr;
+
+        psRefs->psPrev = NULL;
+        psRefs->psNext = (node_s *)( psRefs->psHead->zXor );
+
+        psRefs->zRecord = 0;
+    }
+
+    return psRefs;
 }
 
 size_t
 listLength(
-    list_s *refs
+    list_s const * const psRefs
 ) {
-    return refs ? refs->length : 0;
+    return ( NULL != psRefs ) ? ( psRefs->zLength ) : ( 0 ) ;
 }
 
 list_s *
 listQuickSort(
-    list_s *refs,
-    int (*compare)(void *, void *))
-{
-assert(compare);
+    list_s * const psRefs,
+    int (*pfCompare)(void *, void *)
+) {
+assert( NULL != pfCompare );
 
-    if (listLength(refs) > 1)
+    if ( listLength(psRefs) > 1 )
     {
-        _listQuickSort(refs->head, refs->tail, compare);
+        _listQuickSort(psRefs->psHead, psRefs->psTail, pfCompare);
     }
 
-    return refs;
+    return psRefs;
 }
 
 /* private */
 static 
 bool 
 _listTryAccess(
-    list_s *refs, 
-    size_t idx
+    list_s * const psRefs, 
+    const size_t zIndex
 ) {
-    if (!refs)
+    node_s * psTemp = NULL;
+
+    if ( NULL == psRefs )
     {
         return false;
     }
 
-    if (idx >= refs->length)
+    if ( zIndex >= listLength(psRefs) )
     {
         return false;
     }
 
-    if (idx == 0)
+    if ( zIndex == 0 )
     {
-        refs->curr = refs->head;
-        refs->record = idx;
+        psRefs->psCurr = psRefs->psHead;
+        psRefs->psPrev = NULL;
+        psRefs->psNext = (node_s *)( psRefs->psCurr->zXor );
+        psRefs->zRecord = zIndex;
     }
-    else if (idx == refs->length - 1)
+    else if ( zIndex == listLength(psRefs) - 1 )
     {
-        refs->curr = refs->tail;
-        refs->record = idx;
+        psRefs->psCurr = psRefs->psTail;
+        psRefs->psPrev = (node_s *)( psRefs->psCurr->zXor );
+        psRefs->psNext = NULL;
+        psRefs->zRecord = zIndex;
     }
     else
     {
-        while (refs->record < idx)
+        while ( psRefs->zRecord < zIndex )
         {
-            refs->curr = refs->curr->r;
-            refs->record++;
+            psTemp = psRefs->psCurr;
+            psRefs->psPrev = psRefs->psCurr;
+            psRefs->psCurr = psRefs->psNext;
+            psRefs->psNext = (node_s *)( psRefs->psNext->zXor ^ (size_t)( psTemp ) );
+            psRefs->zRecord++;
         }
-        while (refs->record > idx)
+        while ( psRefs->zRecord > zIndex )
         {
-            refs->curr = refs->curr->l;
-            refs->record--;
+            psTemp = psRefs->psCurr;
+            psRefs->psNext = psRefs->psCurr;
+            psRefs->psCurr = psRefs->psPrev;
+            psRefs->psPrev = (node_s *)( psRefs->psPrev->zXor ^ (size_t)( psTemp ) );
+            psRefs->zRecord--;
         }
     }
 
     return true;
 }
 
-// TODO: be better
 static 
 void 
 _listQuickSort(
-    node_s *head, 
-    node_s *tail, 
-    int (*compare)(void *, void *)
+    node_s * const psHead, 
+    node_s * const psTail, 
+    int (*pfCompare)(void *, void *)
 ) {
-    int chk = 0;
-    void *const pick = head->val;
-    void *temp = NULL;
-    node_s *tipH = head;
-    node_s *tipT = tail;
-    node_s *curr = tipH->r;
-
-    if (head == tail)
-    {
-        return;
-    }
-
-    while (curr != tipT->r)
-    {
-        chk = compare(pick, curr->val);
-
-        if (chk > 0)
-        {
-            temp = curr->val;
-            curr->val = tipH->val;
-            tipH->val = temp;
-            tipH = tipH->r;
-        }
-
-        if (chk < 0)
-        {
-            temp = curr->val;
-            curr->val = tipT->val;
-            tipT->val = temp;
-            tipT = tipT->l;
-        }
-
-        curr = (chk >= 0) ? (curr->r) : (curr);
-    }
-
-    if (head != tipT) 
-    {
-        _listQuickSort(head, tipT, compare);
-    }
-
-    if (NULL != curr) 
-    {
-        _listQuickSort(curr, tail, compare);
-    }
+    // TODO
 }

@@ -1,13 +1,3 @@
-/**
- * @file list.h
- * @author ZHANG, Zhen-Yu (tolatetodieyoung1204@gmail.com)
- * @brief 
- * @version 1.0
- * @date 2024-01-05
- * 
- * 
- */
-
 #ifndef __MYTH_EPIC_LIB_LIST
 #define __MYTH_EPIC_LIB_LIST
 
@@ -15,146 +5,61 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <stdio.h>
-#include <stddef.h>
+#include "pool.h"
 
 typedef struct list_s list_s;
 
-/**
- * @brief 
- * 
- * @param release 
- * @return list_s* 
- */
 list_s * 
 listMake(
-    void (*release)(void *)
+    pool_s * const psPool,
+    void (*pfFree)(void *)
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- */
 void 
 listFree(
-    void * refs
+    void * pvRefs
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- * @param buffer 
- * @param size 
- * @param sign 
- * @param stringify 
- * @return size_t 
- */
-size_t
-listStringify(
-    list_s * refs,
-    char * buffer,
-    size_t size,
-    char * sign,
-    size_t (*stringify)(void *, char *, size_t)
-);
-
-/**
- * @brief 
- * 
- * @param refs 
- * @param stream 
- * @param sign 
- * @param display 
- * @return FILE* 
- */
-FILE * 
-listDisplay(
-    list_s * refs, 
-    FILE * stream,
-    char * sign,
-    FILE * (*display)(void *, FILE *)
-);
-
-/**
- * @brief 
- * 
- * @param refs 
- * @param idx 
- * @param val 
- * @return list_s* 
- */
-list_s * 
-listInsert(
-    list_s * refs, 
-    size_t idx, 
-    void * val
-);
-
-/**
- * @brief 
- * 
- * @param refs 
- * @param idx 
- * @return void* 
- */
 void * 
 listAccess(
-    list_s * refs, 
-    size_t idx
+    list_s * const psRefs, 
+    const size_t zIndex
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- * @param idx 
- * @return list_s* 
- */
-list_s *
-listRemove(
-    list_s * refs, 
-    size_t idx
+list_s * 
+listInsert(
+    list_s * const psRefs, 
+    const size_t zIndex, 
+    void * const pvValue
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- * @param idx 
- * @param val 
- * @return list_s* 
- */
 list_s * 
 listChange(
-    list_s * refs, 
-    size_t idx, 
-    void * val
+    list_s * const psRefs, 
+    const size_t zIndex, 
+    void * const pvValue
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- * @return size_t 
- */
+list_s *
+listRemove(
+    list_s * const psRefs, 
+    const size_t zIndex
+);
+
+list_s *
+listRevert(
+    list_s * const psRefs
+);
+
 size_t 
 listLength(
-    list_s * refs
+    list_s const * const psRefs
 );
 
-/**
- * @brief 
- * 
- * @param refs 
- * @param compare 
- * @return list_s* 
- */
 list_s * 
 listQuickSort(
-    list_s * refs,
-    int (*compare)(void *, void *)
+    list_s * const psRefs,
+    int (*pfCompare)(void *, void *)
 );
 
 #ifdef __cplusplus
