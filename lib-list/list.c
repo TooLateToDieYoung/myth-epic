@@ -12,8 +12,8 @@ struct node_s
 
 struct list_s
 {
-    pool_s * psPool;
-    void (*pfFree)(void *);
+    pool_s * const psPool;
+    void (* const pfFree)(void *);
 
     node_s * psHead;
     node_s * psTail;
@@ -26,21 +26,21 @@ struct list_s
 };
 
 static bool _listTryAccess(list_s * const psRefs, const size_t zIndex);
-static void _listQuickSort(node_s * const psHead, node_s * const psTail, int (*pfCompare)(void *, void *));
+static void _listQuickSort(node_s * const psHead, node_s * const psTail, int (* const pfCompare)(void *, void *));
 
 /* public */
 list_s *
 listMake(
     pool_s * const psPool,
-    void (*pfFree)(void *)
+    void (* const pfFree)(void *)
 ) {
 assert(pfFree);
 
     list_s * const psRefs = (list_s *)poolAlloc(psPool, sizeof(list_s));
     if ( NULL != psRefs )
     {
-        psRefs->psPool = psPool;
-        psRefs->pfFree = pfFree;
+        *(void **)&psRefs->psPool = psPool;
+        *(void **)&psRefs->pfFree = pfFree;
         psRefs->psHead = psRefs->psTail = psRefs->psPrev = psRefs->psCurr = psRefs->psNext = NULL;
         psRefs->zLength = psRefs->zRecord = 0;
     }
@@ -52,12 +52,10 @@ void
 listFree(
     void * pvRefs
 ) {
-    list_s * psRefs = NULL;
+    list_s * const  psRefs = (list_s *)( pvRefs );
 
-    if ( NULL != pvRefs )
+    if ( NULL != psRefs )
     {
-        psRefs = (list_s *)pvRefs;
-
         while ( listLength(psRefs) > 0 )
         {
             listRemove(psRefs, 0);
@@ -242,7 +240,7 @@ listLength(
 list_s *
 listQuickSort(
     list_s * const psRefs,
-    int (*pfCompare)(void *, void *)
+    int (* const pfCompare)(void *, void *)
 ) {
 assert( NULL != pfCompare );
 
@@ -315,7 +313,7 @@ void
 _listQuickSort(
     node_s * const psHead, 
     node_s * const psTail, 
-    int (*pfCompare)(void *, void *)
+    int (* const pfCompare)(void *, void *)
 ) {
     // TODO
 }

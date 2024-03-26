@@ -1,465 +1,458 @@
 #include <assert.h>
-#include <stdlib.h>
 
 #include "tree.h"
 
 typedef struct node_s node_s;
-struct node_s
-{
-    void *val;
-    node_s *p;
-    node_s *l;
-    node_s *r;
-    size_t height;
+struct node_s {
+    void const * pvValue;
+    node_s * psRefsP;
+    node_s * psRefsL;
+    node_s * psRefsR;
+    size_t zHeight;
 };
 
-struct tree_s
-{
-    node_s *root;
-    size_t size;
-    int (*compare)(void *, void *);
-    int (*release)(void *);
+struct tree_s {
+    pool_s * const psPool;
+    int (* const pfCompare)(void *, void *);
+    int (* const pfFree)(void *);
+
+    node_s * psRoot;
+    size_t zSize;
+
+    node_s * psIter;
+    volatile tree_iterator_state_e eIterState;
 };
 
-static node_s *_treeTidyUp(node_s *refs);
-static node_s *_treeFillUp(node_s *refs);
-static node_s *_treeSearch(node_s *refs, void *val, int (*compare)(void *, void *), node_s **last);
-static size_t _treeHeight(node_s *refs);
-static size_t _treeMaxHeight(node_s *refsL, node_s *refsR);
-static size_t _treeStringifyRecursion(node_s *refs, char *buffer, size_t size, char *sign, size_t (*stringify)(void *, char *, size_t));
-static FILE *_treeDumpRecursion(node_s *refs, FILE *stream, char *sign, FILE *(*display)(void *, FILE *));
+static node_s * _treeTidyUp(node_s * const psRefs);
+static node_s * _treeFillUp(node_s * const psRefs);
+static node_s * _treeSearch(node_s * const psRefs, void const * const psValue, int (* const pfCompare)(void *, void *), node_s ** ppsLast);
+static size_t _treeHeight(node_s const * const psRefs);
+static size_t _treeMax(const size_t zA, const size_t zB);
+static void _treeLinkP(node_s * const psCenter, node_s * const psRefsP, node_s * const psOrigin);
+static void _treeLinkL(node_s * const psCenter, node_s * const psRefsL);
+static void _treeLinkR(node_s * const psCenter, node_s * const psRefsR);
 
 /* public */
 tree_s *
 treeMake(
-    int (*compare)(void *, void *),
-    int (*release)(void *)
+    pool_s * const psPool,
+    int (* const pfCompare)(void *, void *),
+    int (* const pfFree)(void *)
 ) {
-assert(compare);
-assert(release);
+assert(pfCompare);
+assert(pfFree);
 
-    tree_s *const refs = (tree_s *)calloc(1, sizeof(tree_s));
-    if (refs)
+    tree_s * const psRefs = (tree_s *)poolAlloc(psPool, sizeof(tree_s));
+    if ( NULL != psRefs )
     {
-        refs->compare = compare;
-        refs->release = release;
+        *(void **)&psRefs->psPool = psPool;
+        *(void **)&psRefs->pfCompare = pfCompare;
+        *(void **)&psRefs->pfFree = pfFree;
+
+        psRefs->psRoot = NULL;
+        psRefs->zSize = 0;
+
+        psRefs->psIter = NULL;
+        psRefs->eIterState = TISReset;
     }
 
-    return refs;
+    return psRefs;
 }
 
 void 
 treeFree(
-    void *refs
+    void * pvRefs
 ) {
-    if (refs)
+    tree_s * const  psRefs = (tree_s *)( pvRefs );
+
+    if ( NULL != psRefs )
     {
-        while (treeSize(refs))
+        while ( treeSize(psRefs) > 0 )
         {
-            treeRemove(refs, ((tree_s *)refs)->root->val);
+            treeRemove(psRefs, psRefs->psRoot->pvValue);
         }
 
-        free(refs);
+        poolErase(psRefs->psPool, psRefs);
     }
-}
-
-size_t
-treeStringify(
-    tree_s * refs,
-    char * buffer,
-    size_t size,
-    char * sign,
-    size_t (*stringify)(void *, char *, size_t)
-) {
-assert(stringify);
-
-    size_t ret = 0;
-
-    if (treeSize(refs))
-    {
-        ret = _treeStringifyRecursion(refs->root, buffer, size, sign, stringify);
-    }
-
-    return ret;
-}
-
-FILE *
-treeDisplay(
-    tree_s *refs,
-    FILE *stream,
-    char *sign,
-    FILE * (*display)(void *, FILE *)
-) {
-assert(display);
-
-    if (treeSize(refs))
-    {
-        if (stream)
-        {
-            _treeDumpRecursion(refs->root, stream, sign, display);
-        }
-    }
-
-    return stream;
-}
-
-tree_s *
-treeInsert(
-    tree_s *refs,
-    void *val
-) {
-    node_s *target = NULL;
-    node_s *last = NULL;
-    node_s *curr = NULL;
-    int chk = 0;
-
-    if (refs)
-    {
-        curr = _treeSearch(refs->root, val, refs->compare, &last);
-        if (curr) /* already exist */
-        {
-            (void)refs->release(curr->val);
-            curr->val = val;
-        }
-        else
-        {
-            target = (node_s *)calloc(1, sizeof(node_s));
-            if (target)
-            {
-                target->val = val;
-                target->height = 1;
-                target->p = last;
-
-                if (!last) /* refs->size == 0 */
-                {
-                    refs->root = target;
-                }
-                else
-                {
-                    chk = refs->compare(val, last->val);
-                    if (chk < 0)
-                    {
-                        last->l = target;
-                    }
-                    if (chk > 0)
-                    {
-                        last->r = target;
-                    }
-
-                    refs->root = _treeTidyUp(last);
-                }
-
-                refs->size++;
-            }
-            else  // ! Error: calloc failed
-            {
-                return NULL;
-            }
-        }
-        
-    }
-
-    return refs;
 }
 
 void *
 treeAccess(
-    tree_s *refs,
-    void *val
+    tree_s * const psRefs, 
+    void const * const pvValue
 ) {
-    node_s *target = NULL;
-
-    if (refs)
-    {
-        target = _treeSearch(refs->root, val, refs->compare, NULL);
-    }
-
-    return target ? target->val : NULL; 
+    return ( NULL == psRefs ) ? ( NULL ) : _treeSearch(psRefs->psRoot, pvValue, psRefs->pfCompare, NULL) ;
 }
 
-int treeRemove(
-    tree_s *refs,
-    void *val)
-{
-    int ret = -1;
-    node_s *target = NULL;
-    node_s *endptr = NULL;
+tree_s *
+treeInsert(
+    tree_s * const psRefs, 
+    void const * const pvValue
+) {
+    node_s * psCurr = NULL;
+    node_s * psLast = NULL;
 
-    if (treeSize(refs))
+    if ( TISReset != treeIteratorState(psRefs) )
     {
-        target = _treeSearch(refs->root, val, refs->compare, NULL);
-        if (target)
-        {
-            ret = refs->release(target->val);
-
-            // ? fill up & remove the lastest one from this topology
-            endptr = _treeFillUp(target);
-
-            // ? tidy up this tree and reset the root
-            refs->root = (1 == refs->size) ? NULL : _treeTidyUp(endptr->p);
-            refs->size--;
-
-            // ? release useless node
-            free(endptr);
-        }
+        return psRefs;
     }
 
-    return ret;
+    psCurr = _treeSearch(psRefs->psRoot, pvValue, psRefs->pfCompare, &psLast);
+    if ( NULL != psCurr )
+    {
+        return treeChange(psRefs, pvValue);
+    }
+
+    psCurr = (node_s *)poolAlloc(psRefs->psPool, sizeof(node_s));
+    if ( NULL != psCurr )
+    {
+        psCurr->pvValue = pvValue;
+        psCurr->zHeight = 1;
+        psCurr->psRefsP = psLast;
+
+        if ( NULL != psLast )
+        {
+            if ( 0 > psRefs->pfCompare(pvValue, psLast->pvValue) ) 
+            { 
+                psLast->psRefsL = psCurr; 
+            } 
+            else 
+            { 
+                psLast->psRefsR = psCurr; 
+            }
+        }
+
+        // ? balance tree
+        psRefs->psRoot = ( 0 == treeSize(psRefs) ) ? ( psCurr ) : _treeTidyUp(psLast) ;
+        psRefs->zSize++;
+    }
+    else  // ! Error: calloc failed
+    {
+        return NULL;
+    }
+
+    return psRefs;
+}
+
+tree_s * 
+treeChange(
+    tree_s * const psRefs, 
+    void const * const pvValue
+) {
+    node_s * psCurr = NULL;
+    node_s * psLast = NULL;
+
+    if ( TISReset != treeIteratorState(psRefs) )
+    {
+        return psRefs;
+    }
+
+    psCurr = _treeSearch(psRefs->psRoot, pvValue, psRefs->pfCompare, &psLast);
+    if ( NULL == psCurr )
+    {
+        return treeInsert(psRefs, pvValue);
+    }
+
+    psRefs->pfFree(psCurr->pvValue);
+    psCurr->pvValue = pvValue;
+
+    return psRefs;
+}
+
+tree_s *
+treeRemove(
+    tree_s * const psRefs, 
+    void const * const pvValue
+) {
+    node_s * psCurr = NULL;
+    node_s * psDrop = NULL;
+
+    if ( TISReset != treeIteratorState(psRefs) )
+    {
+        return psRefs;
+    }
+
+    psCurr = _treeSearch(psRefs->psRoot, pvValue, psRefs->pfCompare, NULL);
+    if ( NULL != psCurr )
+    {
+        psRefs->pfFree(psCurr->pvValue);
+
+        // ? fill up & remove the lastest one from this topology
+        psDrop = _treeFillUp(psCurr);
+
+        // ? tidy up this tree and reset the root
+        psRefs->psRoot = ( 1 == treeSize(psRefs) ) ? ( NULL ) : _treeTidyUp(psDrop->psRefsP) ;
+        psRefs->zSize--;
+
+        // ? release useless node
+        poolErase(psRefs->psPool, psDrop);
+    }
+
+    return psRefs;
 }
 
 size_t
 treeSize(
-    tree_s *refs
+    tree_s const * const psRefs
 ) {
-    return refs ? refs->size : 0;
+    return ( NULL == psRefs ) ? ( 0 ) : ( psRefs->zSize ) ;
 }
 
 size_t
 treeHeight(
-    tree_s *refs
+    tree_s const * const psRefs
 ) {
-    return refs ? _treeHeight(refs->root) : 0;
+    return ( NULL != psRefs ) ? ( 0 ) : _treeHeight(psRefs->psRoot) ;
+}
+
+void const *
+treeIteratorBegin(
+    tree_s * const psRefs
+) {
+    if ( NULL != psRefs )
+    {
+        return NULL;
+    }
+
+    psRefs->eIterState = TISBlock;
+    psRefs->psIter = psRefs->psRoot;
+
+    return ( NULL != psRefs->psIter ) ? ( psRefs->psIter->pvValue ) : ( NULL ) ;
+}
+
+void const *
+treeIteratorShift(
+    tree_s * const psRefs
+) {
+    if ( NULL == psRefs )
+    {
+        return NULL;
+    }
+
+    if ( NULL == psRefs->psIter )
+    {
+        return treeIteratorBegin(psRefs);
+    }
+
+    if ( NULL != psRefs->psIter->psRefsL )
+    {
+        psRefs->psIter = psRefs->psIter->psRefsL;
+        return psRefs->psIter->pvValue;
+    }
+    
+    if ( NULL != psRefs->psIter->psRefsR )
+    {
+        psRefs->psIter = psRefs->psIter->psRefsR;
+        return psRefs->psIter->pvValue;
+    }
+
+    while ( NULL != psRefs->psIter->psRefsP )
+    {
+        if ( psRefs->psIter == psRefs->psIter->psRefsP->psRefsR )
+        {
+            psRefs->psIter = psRefs->psIter->psRefsP;
+        }
+        else
+        {
+            psRefs->psIter = psRefs->psIter->psRefsP->psRefsR;
+            return psRefs->psIter->pvValue;
+        }
+    }
+
+    return NULL; /* end of iterators */
+}
+
+void
+treeIteratorReset(
+    tree_s * const psRefs
+) {
+    if ( NULL != psRefs )
+    {
+        psRefs->psIter = NULL;
+        psRefs->eIterState = TISReset;
+    }
+}
+
+tree_iterator_state_e
+treeIteratorState(
+    tree_s const * const psRefs
+) {
+    return ( NULL == psRefs ) ? ( TISError ) : ( psRefs->eIterState ) ;
 }
 
 /* private */
 static 
 node_s *
 _treeTidyUp(
-    node_s *refs
+    node_s * const psRefs
 ) {
-    node_s *parent = refs->p;
-    node_s *center = refs;
-    const size_t hL = _treeHeight(refs->l);
-    const size_t hR = _treeHeight(refs->r);
+    node_s * psParent = NULL;
+    node_s * psCenter = NULL;
+    size_t zHL = 0;
+    size_t zHR = 0;
 
-    if (hL > hR + 1)
+    psParent = psRefs->psRefsP;
+    zHL = _treeHeight(psRefs->psRefsL);
+    zHR = _treeHeight(psRefs->psRefsR);
+
+    if ( zHL > zHR + 1 )
     {
-        center = refs->l;
+        psCenter = psRefs->psRefsL;
 
-        refs->l = center->r;
-        if (refs->l)
-        {
-            refs->l->p = refs;
-        }
+        _treeLinkL(psRefs, psCenter->psRefsR);
+        _treeLinkR(psCenter, psRefs);
+        _treeLinkP(psCenter, psParent, psRefs);
 
-        refs->p = center;
-        center->r = refs;
-
-        center->p = parent;
-        if (parent)
-        {
-            if (refs == parent->l)
-            {
-                parent->l = center;
-            }
-            if (refs == parent->r)
-            {
-                parent->r = center;
-            }
-        }
-
-        refs->height = 1 + _treeMaxHeight(refs->l, refs->r);
+        zHL = _treeHeight(psRefs->psRefsL);
+        psRefs->zHeight = 1 + _treeMax(zHL, zHR);
     }
 
-    if (hL + 1 < hR)
+    if ( zHL + 1 < zHR )
     {
-        center = refs->r;
+        psCenter = psRefs->psRefsR;
 
-        refs->r = center->l;
-        if (refs->r)
-        {
-            refs->r->p = refs;
-        }
+        _treeLinkR(psRefs, psCenter->psRefsL);
+        _treeLinkL(psCenter, psRefs);
+        _treeLinkP(psCenter, psParent, psRefs);
 
-        refs->p = center;
-        center->l = refs;
-
-        center->p = parent;
-        if (parent)
-        {
-            if (refs == parent->l)
-            {
-                parent->l = center;
-            }
-            if (refs == parent->r)
-            {
-                parent->r = center;
-            }
-        }
-
-        refs->height = 1 + _treeMaxHeight(refs->l, refs->r);
+        zHR = _treeHeight(psRefs->psRefsR);
+        psRefs->zHeight = 1 + _treeMax(zHL, zHR);
     }
 
-    center->height = 1 + _treeMaxHeight(center->l, center->r);
+    zHL = _treeHeight(psCenter->psRefsL);
+    zHR = _treeHeight(psCenter->psRefsR);
+    psCenter->zHeight = 1 + _treeMax(zHL, zHR);
 
-    return parent ? _treeTidyUp(parent) : center;
+    return ( NULL == psParent ) ? ( psCenter ) : _treeTidyUp(psParent) ;
 }
 
 static 
 node_s *
 _treeFillUp(
-    node_s *refs
+    node_s * const psRefs
 ) {
-    node_s *parent = refs->p;
-    node_s *winner = refs->l ? refs->l : refs->r;
+    node_s * psWinner = NULL;
 
-    if (!winner) /* reach to the tail */
+    // ? check if attach to the tail
+    if ( 1 == _treeHeight(psRefs) )
     {
-        if (parent) /* remove from the tree */
+        // ? check if the tail has parent, which can refer to the tail: need to unlink
+        if ( NULL != psRefs->psRefsP )
         {
-            if (refs == parent->l)
+            // ? make the tail be isolated
+            if ( psRefs == psRefs->psRefsP->psRefsL )
             {
-                parent->l = NULL;
+                psRefs->psRefsP->psRefsL = NULL;
             }
-            if (refs == parent->r)
+            else
             {
-                parent->r = NULL;
+                psRefs->psRefsP->psRefsR = NULL;
             }
         }
 
-        return refs; /* release by caller */
+        return psRefs; // ? release memory source by the caller
     }
 
-    refs->val = winner->val;
+    // ? store the next one data, and shift to the next level
+    psWinner = psRefs->psRefsL ? psRefs->psRefsL : psRefs->psRefsR ;
+    psRefs->pvValue = psWinner->pvValue;
 
-    return _treeFillUp(winner);
+    // ? keep looking for the tail
+    return _treeFillUp(psWinner);
 }
 
 static 
 node_s *
 _treeSearch(
-    node_s *refs,
-    void *val,
-    int (*compare)(void *, void *),
-    node_s **last
+    node_s * const psRefs,
+    void const * const pvValue,
+    int (* const pfCompare)(void *, void *),
+    node_s ** ppsLast
 ) {
-    int chk = 0;
-    node_s *temp = NULL;
-    node_s *curr = refs;
+    int check = 0;
+    node_s * psTemp = NULL;
+    node_s * psCurr = psRefs;
 
-    while (curr)
+    while ( NULL != psCurr )
     {
-        temp = curr;
-        chk = compare(val, curr->val);
-        if (chk < 0)
-        {
-            curr = curr->l;
-            continue;
-        }
-        if (chk > 0)
-        {
-            curr = curr->r;
-            continue;
-        }
+        psTemp = psCurr;
+        check = pfCompare(pvValue, psCurr->pvValue);
+        if ( 0 > check ) { psCurr = psCurr->psRefsL; continue; }
+        if ( 0 < check ) { psCurr = psCurr->psRefsR; continue; }
         break;
     }
 
-    if (last)
+    if ( NULL != ppsLast )
     {
-        *last = temp;
+        *ppsLast = psTemp;
     }
-    return curr;
+    return psCurr;
 }
 
 static
 size_t
 _treeHeight(
-    node_s *refs
+    node_s const * const psRefs
 ) {
-    return refs ? refs->height : 0;
-}
-
-static 
-size_t
-_treeMaxHeight(
-    node_s *refsL,
-    node_s *refsR
-) {
-    const size_t hL = _treeHeight(refsL);
-    const size_t hR = _treeHeight(refsR);
-
-    return hL > hR ? hL : hR;
+    return ( NULL == psRefs ) ? ( 0 ) : ( psRefs->zHeight ) ;
 }
 
 static 
 size_t 
-_treeStringifyRecursion(
-    node_s *refs, 
-    char *buffer, 
-    size_t size, 
-    char *sign, 
-    size_t (*stringify)(void *, char *, size_t)
+_treeMax(
+    const size_t zA, 
+    const size_t zB
 ) {
-    size_t ret = 0;
-    char * position = buffer ? buffer : NULL;
-    size_t boundary = position ? size : 0;
-
-    if (refs->l)
-    {
-        ret += _treeStringifyRecursion(refs->l, position, boundary, sign, stringify);
-        if (buffer)
-        {
-            boundary = size > ret ? size - ret : 0;
-            if (!boundary) { goto __exit; }
-            else { position = buffer + ret; }
-        }
-        ret += snprintf(position, boundary, "%s", sign);
-        if (buffer)
-        {
-            boundary = size > ret ? size - ret : 0;
-            if (!boundary) { goto __exit; }
-            else { position = buffer + ret; }
-        }
-    }
-
-    if (refs->r)
-    {
-        ret += _treeStringifyRecursion(refs->r, position, boundary, sign, stringify);
-        if (buffer)
-        {
-            boundary = size > ret ? size - ret : 0;
-            if (!boundary) { goto __exit; }
-            else { position = buffer + ret; }
-        }
-        ret += snprintf(position, boundary, "%s", sign);
-        if (buffer)
-        {
-            boundary = size > ret ? size - ret : 0;
-            if (!boundary) { goto __exit; }
-            else { position = buffer + ret; }
-        }
-    }
-
-    ret += stringify(refs->val, position, boundary);
-
-__exit:
-    if (buffer)
-    {
-        ret = size > ret ? ret : 0;
-    }
-
-    return ret;
+    return ( zA > zB ) ? ( zA ) : ( zB ) ;
 }
 
 static 
-FILE *
-_treeDumpRecursion(
-    node_s *refs,
-    FILE *stream,
-    char *sign,
-    FILE *(*display)(void *, FILE *)
+void 
+_treeLinkP(
+    node_s * const psCenter, 
+    node_s * const psRefsP, 
+    node_s * const psOrigin
 ) {
-    if (refs->l)
+    if ( NULL != psCenter )
     {
-        _treeDumpRecursion(refs->l, stream, sign, display);
-        fprintf(stream, "%s", sign);
+        psCenter->psRefsP = psRefsP;
     }
-
-    if (refs->r)
+    if ( NULL != psRefsP )
     {
-        _treeDumpRecursion(refs->r, stream, sign, display);
-        fprintf(stream, "%s", sign);
+        if ( psOrigin == psRefsP->psRefsL ) { psRefsP->psRefsL = psCenter; return; }
+        if ( psOrigin == psRefsP->psRefsR ) { psRefsP->psRefsR = psCenter; return; }
+        // ! Error
     }
+}
 
-    return display(refs->val, stream);
+static 
+void 
+_treeLinkL(
+    node_s * const psCenter, 
+    node_s * const psRefsL
+) {
+    if ( NULL != psCenter )
+    {
+        psCenter->psRefsL = psRefsL;
+    }
+    if ( NULL != psRefsL )
+    {
+        psRefsL->psRefsP = psCenter;
+    }
+}
+
+static 
+void 
+_treeLinkR(
+    node_s * const psCenter, 
+    node_s * const psRefsR
+) {
+    if ( NULL != psCenter )
+    {
+        psCenter->psRefsR = psRefsR;
+    }
+    if ( NULL != psRefsR )
+    {
+        psRefsR->psRefsP = psCenter;
+    }
 }

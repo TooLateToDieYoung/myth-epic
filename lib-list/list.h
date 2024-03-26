@@ -12,7 +12,7 @@ typedef struct list_s list_s;
 list_s * 
 listMake(
     pool_s * const psPool,
-    void (*pfFree)(void *)
+    void (* const pfFree)(void *)
 );
 
 void 
@@ -59,7 +59,7 @@ listLength(
 list_s * 
 listQuickSort(
     list_s * const psRefs,
-    int (*pfCompare)(void *, void *)
+    int (* const pfCompare)(void *, void *)
 );
 
 #ifdef __cplusplus
