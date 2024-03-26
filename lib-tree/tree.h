@@ -11,6 +11,10 @@ typedef enum { TISError = -1, TISReset, TISBlock } tree_iterator_state_e;
 
 typedef struct tree_s tree_s;
 
+typedef struct {
+    void const * const pvValue;
+} tree_iterator_s;
+
 tree_s * 
 treeMake(
     pool_s * const psPool,
@@ -57,12 +61,12 @@ treeHeight(
     tree_s const * const psRefs
 );
 
-void const *
-treeIteratorBegin(
+void
+treeIteratorBlock(
     tree_s * const psRefs
 );
 
-void const *
+tree_iterator_s *
 treeIteratorShift(
     tree_s * const psRefs
 );

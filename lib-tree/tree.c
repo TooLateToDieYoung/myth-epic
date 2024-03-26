@@ -205,45 +205,45 @@ treeHeight(
     return ( NULL != psRefs ) ? ( 0 ) : _treeHeight(psRefs->psRoot) ;
 }
 
-void const *
-treeIteratorBegin(
+void
+treeIteratorBlock(
     tree_s * const psRefs
 ) {
     if ( NULL != psRefs )
     {
-        return NULL;
+        psRefs->eIterState = TISBlock;
+        psRefs->psIter = psRefs->psRoot;
     }
-
-    psRefs->eIterState = TISBlock;
-    psRefs->psIter = psRefs->psRoot;
-
-    return ( NULL != psRefs->psIter ) ? ( psRefs->psIter->pvValue ) : ( NULL ) ;
 }
 
-void const *
+tree_iterator_s *
 treeIteratorShift(
     tree_s * const psRefs
 ) {
-    if ( NULL == psRefs )
+    tree_iterator_s * psResult = NULL;
+
+    if ( TISBlock != treeIteratorState(psRefs) )
     {
         return NULL;
     }
 
     if ( NULL == psRefs->psIter )
     {
-        return treeIteratorBegin(psRefs);
+        return NULL; /* last time already shift to the end */
     }
+
+    psResult = (tree_iterator_s *)( psRefs->psIter );
 
     if ( NULL != psRefs->psIter->psRefsL )
     {
         psRefs->psIter = psRefs->psIter->psRefsL;
-        return psRefs->psIter->pvValue;
+        goto __exit;
     }
     
     if ( NULL != psRefs->psIter->psRefsR )
     {
         psRefs->psIter = psRefs->psIter->psRefsR;
-        return psRefs->psIter->pvValue;
+        goto __exit;
     }
 
     while ( NULL != psRefs->psIter->psRefsP )
@@ -255,11 +255,14 @@ treeIteratorShift(
         else
         {
             psRefs->psIter = psRefs->psIter->psRefsP->psRefsR;
-            return psRefs->psIter->pvValue;
+            goto __exit;
         }
     }
 
-    return NULL; /* end of iterators */
+    psRefs->psIter = NULL; /* this time attach to end of iterators */
+
+__exit:
+    return psResult; 
 }
 
 void
