@@ -6,42 +6,20 @@ extern "C" {
 #endif /* __cplusplus */
 
 #include "pool.h"
-#include <string.h>
 
-static inline 
-char * 
-wordStrdup(
-    pool_s * const psPool,
-    char const * const pSource,
-    const size_t zLength
-) {
-    size_t zMinmum = 0;
-    char * pResult = 0;
-    
-    if ( NULL == psPool || NULL == pSource )
-    {
-        return NULL;
-    }
+#warning "Mush call poolErase() to free"
 
-    zMinmum = 1 + strlen(pSource);
-    if ( zLength > 0 && zMinmum > zLength )
-    {
-        zMinmum = zLength;
-    }
+typedef struct word_s word_s;
 
-    if ( 0 == zMinmum )
-    {
-        return NULL;
-    }
+word_s * wordDupAll(pool_s * const psPool, char const * const pSource);
+word_s * wordDupLen(pool_s * const psPool, char const * const pSource, const size_t zLength);
+word_s * wordDupChr(pool_s * const psPool, char const * const pSource, const char endChr);
+word_s * wordDupStr(pool_s * const psPool, char const * const pSource, char const * const pEndStr);
 
-    pResult = (char *)poolAlloc(psPool, zMinmum);
-    if ( NULL != pResult )
-    {
-        memcpy(pResult, pSource, zMinmum - 1);
-    }
+void wordFree(void * pvRefs);
 
-    return pResult;
-}
+char const * wordAccess(word_s const * const psRefs);
+size_t wordLength(word_s const * const psRefs);
 
 #ifdef __cplusplus
 }

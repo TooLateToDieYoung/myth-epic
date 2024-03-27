@@ -3,7 +3,7 @@
 #include <stdbool.h>
 
 typedef struct {
-    unsigned int prevDiff : 14;
+    unsigned int headDiff : 14;
     unsigned int nextDiff : 14;
     unsigned int shiftDeg : 4;
 } node_s;
@@ -59,7 +59,7 @@ poolFormat(
 
     psRefs = (pool_s *)( pvBuffer );
 
-    psRefs->psHead.prevDiff = 0;
+    psRefs->psHead.headDiff = 0;
     psRefs->psHead.nextDiff = 0;
     psRefs->psHead.shiftDeg = _poolComputeShiftDegree( sizeof(pool_s) );
 
@@ -105,7 +105,8 @@ poolAlloc(
             if ( psRefs->psInfo.psBoundary >= psFakeNode )
             {
                 // ? this gap is enough
-                psTempNode->prevDiff = psCurrNode->nextDiff = (char *)psTempNode - (char *)psCurrNode;
+                psTempNode->headDiff = (char *)psTempNode - (char *)&psRefs->psHead;
+                psCurrNode->nextDiff = (char *)psTempNode - (char *)psCurrNode;
                 psTempNode->nextDiff = 0;
                 psTempNode->shiftDeg = shiftDeg;
                 goto __exit;
@@ -119,8 +120,9 @@ poolAlloc(
         else if ( psNextNode >= psFakeNode )
         {
             // ? this gap is enough
-            psTempNode->prevDiff = psCurrNode->nextDiff = (char *)psTempNode - (char *)psCurrNode;
-            psTempNode->nextDiff = psNextNode->prevDiff = (char *)psNextNode - (char *)psTempNode;
+            psTempNode->headDiff = (char *)psTempNode - (char *)&psRefs->psHead;
+            psCurrNode->nextDiff = (char *)psTempNode - (char *)psCurrNode;
+            psTempNode->nextDiff = (char *)psNextNode - (char *)psTempNode;
             psTempNode->shiftDeg = shiftDeg;
             goto __exit;
         }
@@ -181,11 +183,45 @@ poolErase(
     else
     {
         psNextNode = (node_s *)( (char *)psCurrNode + psCurrNode->nextDiff );
-        psNextNode->prevDiff = psPrevNode->nextDiff = (char *)psNextNode - (char *)psPrevNode;
+        psNextNode->headDiff = (char *)psNextNode - (char *)&psRefs->psHead;
+        psPrevNode->nextDiff = (char *)psNextNode - (char *)psPrevNode;
     }
 
     psRefs->psInfo.zUsage -= ( 1 << psCurrNode->shiftDeg );
     return psRefs;
+}
+
+size_t
+poolSpace(
+    pool_s const * const psRefs,
+    void * const pvTarget
+) {
+    node_s * psCurrNode = NULL;
+
+    if ( NULL == psRefs || NULL == pvTarget )
+    {
+        return psRefs;
+    }
+
+    if ( 0 == psRefs->psHead.nextDiff )
+    {
+        // ! error: there is no allocated memeory
+        return 0;
+    }
+
+    psCurrNode = &psRefs->psHead;
+    while ( 0 != psCurrNode->nextDiff )
+    {
+        if ( (void *)( psCurrNode + 1 ) == pvTarget )
+        {
+            // ? found it
+            return ( 1 << psCurrNode->shiftDeg );
+        }
+
+        psCurrNode = (node_s *)( (char *)psCurrNode + psCurrNode->nextDiff );
+    }
+
+    return 0;
 }
 
 size_t

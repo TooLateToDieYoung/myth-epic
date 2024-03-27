@@ -28,6 +28,12 @@ poolErase(
 );
 
 size_t
+poolSpace(
+    pool_s const * const psRefs,
+    void * const pvTarget
+);
+
+size_t
 poolTotal(
     pool_s const * const psRefs
 );
